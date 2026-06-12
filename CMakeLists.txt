@@ -10,6 +10,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 include(GNUInstallDirs)
+find_package(Threads REQUIRED)
 
 set(MFGIGABROT_DEFAULT_NANQUIM_ROOT "${PROJECT_SOURCE_DIR}/../Nanquim")
 if(DEFINED ENV{NANQUIM_ROOT})
@@ -28,6 +29,11 @@ add_library(mandel_core STATIC
 target_include_directories(mandel_core
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(mandel_core
+    PUBLIC
+        Threads::Threads
 )
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")

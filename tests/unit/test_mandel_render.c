@@ -59,6 +59,11 @@ static void test_rejects_invalid_inputs(void)
     assert(mandel_render_region_f64(&valid, &pixel, -1, 1) == -1);
     assert(mandel_render_region_f64(&valid, &pixel, 1, 0) == -1);
     assert(mandel_render_region_f64(&valid, &pixel, 0, 2) == -1);
+
+    assert(mandel_render_f64_threads(0, &pixel, 1) == -1);
+    assert(mandel_render_f64_threads(&valid, 0, 1) == -1);
+    assert(mandel_render_f64_threads(&valid, &pixel, 0) == -1);
+    assert(mandel_render_f64_threads(&valid, &pixel, -1) == -1);
 }
 
 static void test_renders_single_center_pixel(void)
@@ -162,6 +167,35 @@ static void test_empty_region_is_valid_and_does_not_write(void)
     assert(pixels[3] == 44);
 }
 
+static void assert_threaded_render_matches_full_render(int thread_count)
+{
+    uint32_t full[117] = {0};
+    uint32_t threaded[117] = {0};
+    const MandelView view = {
+        .width = 13,
+        .height = 9,
+        .center_re = -0.743643887037151,
+        .center_im = 0.13182590420533,
+        .scale = 0.01,
+        .max_iter = 128,
+    };
+
+    assert(mandel_render_f64(&view, full) == 0);
+    assert(mandel_render_f64_threads(&view, threaded, thread_count) == 0);
+
+    for (int i = 0; i < 117; ++i) {
+        assert(full[i] == threaded[i]);
+    }
+}
+
+static void test_threaded_render_matches_full_render(void)
+{
+    assert_threaded_render_matches_full_render(1);
+    assert_threaded_render_matches_full_render(2);
+    assert_threaded_render_matches_full_render(3);
+    assert_threaded_render_matches_full_render(16);
+}
+
 int main(void)
 {
     test_rejects_invalid_inputs();
@@ -170,6 +204,7 @@ int main(void)
     test_region_full_height_matches_full_render();
     test_regions_can_reconstruct_full_render();
     test_empty_region_is_valid_and_does_not_write();
+    test_threaded_render_matches_full_render();
 
     return 0;
 }

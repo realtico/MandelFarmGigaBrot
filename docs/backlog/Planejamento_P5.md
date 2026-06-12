@@ -78,6 +78,13 @@ mandel_render_f64(view, buffer)
 
 Depois que renderizar uma regiao funcionar em modo single-thread, podemos dividir a imagem em faixas horizontais.
 
+Status atual:
+
+```text
+P5-002a concluido: mandel_render_f64_threads foi criada com pthreads.
+P5-002b concluido: comentarios didaticos sobre faixas e ausencia de data race foram adicionados.
+```
+
 Exemplo com 4 threads:
 
 ```text
@@ -288,11 +295,11 @@ P5-006b: threads consumindo tiles de uma fila compartilhada
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-002a - renderizacao multithread por faixas horizontais**.
+Seguir para **P5-003a - mandel-bench --threads**.
 
 Motivo:
 
-- `mandel_render_region_f64` ja criou a unidade de trabalho;
-- ja temos testes mostrando que regioes reconstruem o render completo;
-- agora podemos introduzir `pthread_create` e `pthread_join` usando faixas de linhas;
-- o proximo foco de aprendizado passa a ser concorrencia controlada com buffer compartilhado.
+- `mandel_render_f64_threads` ja existe e produz resultado equivalente ao single-core;
+- os testes cobrem `thread_count` 1, 2, 3 e mais threads que linhas;
+- agora precisamos medir speedup e expor `--threads` no benchmark;
+- o proximo foco de aprendizado passa a ser observar desempenho real e overhead.

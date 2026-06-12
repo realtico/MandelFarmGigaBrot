@@ -31,4 +31,17 @@ int mandel_render_f64(const MandelView *view, uint32_t *iterations);
  */
 int mandel_render_region_f64(const MandelView *view, uint32_t *iterations, int y_start, int y_end);
 
+/*
+ * Renders the full view using horizontal row bands distributed across threads.
+ *
+ * Each worker receives a non-overlapping [y_start, y_end) interval and writes
+ * only that interval into the shared output buffer. The shared MandelView is
+ * read-only. This keeps the first threaded renderer free of data races without
+ * needing locks around pixel writes.
+ *
+ * thread_count must be positive. Passing 1 is valid and should produce exactly
+ * the same result as mandel_render_f64().
+ */
+int mandel_render_f64_threads(const MandelView *view, uint32_t *iterations, int thread_count);
+
 #endif
