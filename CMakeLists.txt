@@ -184,6 +184,31 @@ add_test(
         --repeat 2
         --json
 )
+add_test(
+    NAME mandel_bench_tiles_cli
+    COMMAND mandel-bench
+        --scene medium
+        --width 64
+        --height 48
+        --max-iter 128
+        --threads 4
+        --scheduler tiles
+        --tile-size 16
+        --repeat 2
+)
+add_test(
+    NAME mandel_thread_sweep_tiles_json
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --max-iter 128
+        --thread-sweep 1,2,4
+        --scheduler tiles
+        --tile-size 16
+        --repeat 2
+        --json
+)
 
 set_target_properties(mandel-render PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

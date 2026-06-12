@@ -57,4 +57,18 @@ int mandel_render_tile_f64(const MandelView *view, uint32_t *iterations, const M
  */
 int mandel_render_f64_threads(const MandelView *view, uint32_t *iterations, int thread_count);
 
+/*
+ * Renders the full view using a shared queue of rectangular tiles.
+ *
+ * Unlike mandel_render_f64_threads(), work is not assigned as one fixed row
+ * band per thread. Instead, many tiles are generated from tile_size, and each
+ * worker repeatedly takes the next tile from a mutex-protected queue. This is
+ * the first dynamic scheduler in the project and prepares the mental model for
+ * future local and remote workers.
+ *
+ * thread_count and tile_size must be positive. Passing 1 thread is valid and
+ * still uses the same tile path, just without parallel execution.
+ */
+int mandel_render_f64_tile_threads(const MandelView *view, uint32_t *iterations, int thread_count, int tile_size);
+
 #endif

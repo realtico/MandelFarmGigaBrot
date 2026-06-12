@@ -280,11 +280,28 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Neste momento os tiles ainda nao aparecem como opcao de CLI. Eles existem como API de renderizacao e base para o proximo passo: fila de tiles concorrente.
+Os tiles tambem aparecem no `mandel-bench` quando usamos o scheduler dinamico:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --thread-sweep 1,2,4,8,10,12,16,20 \
+  --scheduler tiles \
+  --tile-size 128 \
+  --repeat 5
+```
 
 ## P5.6 - Fila De Tiles Concorrente
 
-Esta parte pode ficar como extensao do P5 se quisermos entrar em sincronizacao.
+Depois de termos tiles locais, introduzimos uma fila compartilhada consumida por varias threads.
+
+Status atual:
+
+```text
+P5-006a concluido: fila local de tiles criada dentro do renderer.
+P5-006b concluido: threads consomem tiles da fila com mutex.
+P5-006c concluido: mandel-bench expoe --scheduler bands|tiles e --tile-size.
+```
 
 Ideia:
 
@@ -303,8 +320,39 @@ Aprendizados:
 - fila compartilhada;
 - balanceamento dinamico de carga;
 - por que tiles podem distribuir trabalho melhor que faixas fixas.
+- por que o lock deve proteger apenas a retirada do proximo tile, nao o calculo pesado;
+- como comparar scheduler fixo por faixas contra scheduler dinamico por tarefas.
 
 Essa etapa ja comeca a se aproximar da arquitetura futura de workers remotos.
+
+Como rodar este marco:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Comparar faixas fixas:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --thread-sweep 1,2,4,8,10,12,16,20 \
+  --scheduler bands \
+  --repeat 5
+```
+
+Comparar fila dinamica de tiles:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --thread-sweep 1,2,4,8,10,12,16,20 \
+  --scheduler tiles \
+  --tile-size 128 \
+  --repeat 5
+```
 
 ## Backlog Replanejado
 
@@ -328,18 +376,16 @@ P5-005c: equivalencia tile vs render completo
 
 P5-006a: fila local de tiles
 P5-006b: threads consumindo tiles de uma fila compartilhada
+P5-006c: benchmark comparando scheduler bands vs tiles
 ```
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-006a - fila local de tiles**.
+Seguir para **P5-007 - estudar granularidade e overhead de tiles**.
 
 Motivo:
 
-- `mandel_render_f64_threads` ja existe e produz resultado equivalente ao single-core;
-- os testes cobrem `thread_count` 1, 2, 3 e mais threads que linhas;
-- `mandel-bench --threads` ja permite medir uma configuracao por vez;
-- `mandel-bench --thread-sweep` ja compara varias configuracoes em uma mesma execucao;
-- `mandel-bench --repeat` ja reduz ruido e ajuda a enxergar plateau de desempenho;
-- `MandelTile` e `mandel_render_tile_f64` ja existem e preservam o resultado do render completo;
-- o proximo foco de aprendizado passa a ser uma fila compartilhada de tiles consumida por threads.
+- ja temos scheduler fixo por faixas;
+- ja temos scheduler dinamico por fila de tiles;
+- agora vale medir como `--tile-size 32`, `64`, `128`, `256` e `512` mudam overhead, balanceamento e throughput;
+- esse estudo prepara uma escolha mais consciente antes de levar tiles para uma arquitetura distribuida.

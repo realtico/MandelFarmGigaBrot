@@ -96,6 +96,13 @@ static void test_rejects_invalid_inputs(void)
     assert(mandel_render_f64_threads(&valid, 0, 1) == -1);
     assert(mandel_render_f64_threads(&valid, &pixel, 0) == -1);
     assert(mandel_render_f64_threads(&valid, &pixel, -1) == -1);
+
+    assert(mandel_render_f64_tile_threads(0, &pixel, 1, 1) == -1);
+    assert(mandel_render_f64_tile_threads(&valid, 0, 1, 1) == -1);
+    assert(mandel_render_f64_tile_threads(&valid, &pixel, 0, 1) == -1);
+    assert(mandel_render_f64_tile_threads(&valid, &pixel, 1, 0) == -1);
+    assert(mandel_render_f64_tile_threads(&valid, &pixel, -1, 1) == -1);
+    assert(mandel_render_f64_tile_threads(&valid, &pixel, 1, -1) == -1);
 }
 
 static void test_renders_single_center_pixel(void)
@@ -302,6 +309,35 @@ static void test_threaded_render_matches_full_render(void)
     assert_threaded_render_matches_full_render(16);
 }
 
+static void assert_tile_threaded_render_matches_full_render(int thread_count, int tile_size)
+{
+    uint32_t full[221] = {0};
+    uint32_t tiled[221] = {0};
+    const MandelView view = {
+        .width = 17,
+        .height = 13,
+        .center_re = -0.743643887037151,
+        .center_im = 0.13182590420533,
+        .scale = 0.01,
+        .max_iter = 160,
+    };
+
+    assert(mandel_render_f64(&view, full) == 0);
+    assert(mandel_render_f64_tile_threads(&view, tiled, thread_count, tile_size) == 0);
+
+    for (int i = 0; i < 221; ++i) {
+        assert(full[i] == tiled[i]);
+    }
+}
+
+static void test_tile_threaded_render_matches_full_render(void)
+{
+    assert_tile_threaded_render_matches_full_render(1, 1);
+    assert_tile_threaded_render_matches_full_render(2, 3);
+    assert_tile_threaded_render_matches_full_render(4, 5);
+    assert_tile_threaded_render_matches_full_render(32, 64);
+}
+
 int main(void)
 {
     test_rejects_invalid_inputs();
@@ -313,6 +349,7 @@ int main(void)
     test_single_tile_matches_full_render();
     test_tiles_reconstruct_full_render();
     test_threaded_render_matches_full_render();
+    test_tile_threaded_render_matches_full_render();
 
     return 0;
 }

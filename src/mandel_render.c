@@ -14,6 +14,21 @@ typedef struct {
     int result;
 } MandelThreadJob;
 
+typedef struct {
+    const MandelView *view;
+    uint32_t *iterations;
+    int tile_size;
+    int tile_cols;
+    int tile_count;
+    int next_tile;
+    pthread_mutex_t mutex;
+} MandelTileQueue;
+
+typedef struct {
+    MandelTileQueue *queue;
+    int result;
+} MandelTileThreadJob;
+
 static int mandel_view_is_valid(const MandelView *view)
 {
     return view != 0 &&
@@ -82,6 +97,76 @@ static void *mandel_render_thread_main(void *arg)
      */
     job->result = mandel_render_region_f64(job->view, job->iterations, job->y_start, job->y_end);
     return 0;
+}
+
+static int mandel_tile_queue_take(MandelTileQueue *queue, MandelTile *tile)
+{
+    int tile_index = 0;
+
+    /*
+     * The queue's shared state is only next_tile. Keep the critical section as
+     * small as possible: claim one tile index, then release the mutex before
+     * doing any Mandelbrot work.
+     */
+    if (pthread_mutex_lock(&queue->mutex) != 0) {
+        return -1;
+    }
+
+    if (queue->next_tile >= queue->tile_count) {
+        pthread_mutex_unlock(&queue->mutex);
+        return 0;
+    }
+
+    tile_index = queue->next_tile++;
+
+    if (pthread_mutex_unlock(&queue->mutex) != 0) {
+        return -1;
+    }
+
+    const int tile_row = tile_index / queue->tile_cols;
+    const int tile_col = tile_index % queue->tile_cols;
+    const int x = tile_col * queue->tile_size;
+    const int y = tile_row * queue->tile_size;
+    const int remaining_width = queue->view->width - x;
+    const int remaining_height = queue->view->height - y;
+
+    *tile = (MandelTile){
+        .x = x,
+        .y = y,
+        .width = remaining_width < queue->tile_size ? remaining_width : queue->tile_size,
+        .height = remaining_height < queue->tile_size ? remaining_height : queue->tile_size,
+    };
+    return 1;
+}
+
+static void *mandel_render_tile_thread_main(void *arg)
+{
+    MandelTileThreadJob *job = arg;
+    MandelTile tile;
+
+    /*
+     * Dynamic scheduling loop: each worker keeps asking the shared queue for
+     * work until no tiles remain. Slow tiles no longer pin one fixed thread to
+     * one fixed image band; the next available worker can help with later work.
+     */
+    for (;;) {
+        const int take_result = mandel_tile_queue_take(job->queue, &tile);
+
+        if (take_result < 0) {
+            job->result = -1;
+            return 0;
+        }
+
+        if (take_result == 0) {
+            job->result = 0;
+            return 0;
+        }
+
+        if (mandel_render_tile_f64(job->queue->view, job->queue->iterations, &tile) != 0) {
+            job->result = -1;
+            return 0;
+        }
+    }
 }
 
 int mandel_render_f64(const MandelView *view, uint32_t *iterations)
@@ -191,6 +276,80 @@ int mandel_render_f64_threads(const MandelView *view, uint32_t *iterations, int 
         if (jobs[i].result != 0) {
             result = -1;
         }
+    }
+
+    free(threads);
+    free(jobs);
+    return result;
+}
+
+int mandel_render_f64_tile_threads(const MandelView *view, uint32_t *iterations, int thread_count, int tile_size)
+{
+    if (!mandel_view_is_valid(view) || iterations == 0 || thread_count <= 0 || tile_size <= 0) {
+        return -1;
+    }
+
+    const int tile_cols = (view->width + tile_size - 1) / tile_size;
+    const int tile_rows = (view->height + tile_size - 1) / tile_size;
+    const int tile_count = tile_cols * tile_rows;
+
+    if (thread_count > tile_count) {
+        thread_count = tile_count;
+    }
+
+    pthread_t *threads = malloc((size_t)thread_count * sizeof(*threads));
+    MandelTileThreadJob *jobs = malloc((size_t)thread_count * sizeof(*jobs));
+
+    if (threads == 0 || jobs == 0) {
+        free(threads);
+        free(jobs);
+        return -1;
+    }
+
+    MandelTileQueue queue = {
+        .view = view,
+        .iterations = iterations,
+        .tile_size = tile_size,
+        .tile_cols = tile_cols,
+        .tile_count = tile_count,
+        .next_tile = 0,
+    };
+
+    if (pthread_mutex_init(&queue.mutex, 0) != 0) {
+        free(threads);
+        free(jobs);
+        return -1;
+    }
+
+    int created = 0;
+    int result = 0;
+
+    for (int i = 0; i < thread_count; ++i) {
+        jobs[i] = (MandelTileThreadJob){
+            .queue = &queue,
+            .result = -1,
+        };
+
+        if (pthread_create(&threads[i], 0, mandel_render_tile_thread_main, &jobs[i]) != 0) {
+            result = -1;
+            break;
+        }
+
+        ++created;
+    }
+
+    for (int i = 0; i < created; ++i) {
+        if (pthread_join(threads[i], 0) != 0) {
+            result = -1;
+        }
+
+        if (jobs[i].result != 0) {
+            result = -1;
+        }
+    }
+
+    if (pthread_mutex_destroy(&queue.mutex) != 0) {
+        result = -1;
     }
 
     free(threads);

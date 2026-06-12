@@ -108,7 +108,28 @@ Compare several thread counts in one benchmark run:
 
 The sweep reports speedup relative to the first thread count in the list. `duration_ms` is the best observed run for that configuration; `duration_ms_avg` and `duration_ms_worst` help reveal scheduler noise and outliers.
 
-The local tile renderer is currently exposed as C API and covered by unit tests. It is the base for the future queued tile worker:
+Compare the fixed row-band scheduler with the dynamic tile-queue scheduler:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --thread-sweep 1,2,4,8,10,12,16,20 \
+  --scheduler tiles \
+  --tile-size 128 \
+  --repeat 5
+```
+
+With `--scheduler tiles`, workers repeatedly take the next tile from a shared queue. This is useful for studying dynamic load balancing. The row-band scheduler remains the default:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --thread-sweep 1,2,4,8,10,12,16,20 \
+  --scheduler bands \
+  --repeat 5
+```
+
+The local tile renderer is also exposed as C API and covered by unit tests:
 
 ```c
 MandelTile tile = {
