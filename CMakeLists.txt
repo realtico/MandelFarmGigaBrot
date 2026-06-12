@@ -160,6 +160,25 @@ add_test(
         --node-name test-node
         --output "${CMAKE_BINARY_DIR}/node-report-smoke.json"
 )
+add_test(
+    NAME mandel_thread_sweep_cli
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --max-iter 128
+        --thread-sweep 1,2,4
+)
+add_test(
+    NAME mandel_thread_sweep_json
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --max-iter 128
+        --thread-sweep 1,2,4
+        --json
+)
 
 set_target_properties(mandel-render PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

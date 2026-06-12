@@ -10,6 +10,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MAX_THREAD_SWEEP_ITEMS 64
+
 typedef struct {
     const char *name;
     MandelView view;
@@ -21,6 +23,8 @@ typedef struct {
     int json;
     int node_report;
     int threads;
+    int thread_sweep[MAX_THREAD_SWEEP_ITEMS];
+    int thread_sweep_count;
     const char *node_name;
     const char *output_path;
 } BenchOptions;
@@ -33,6 +37,14 @@ typedef struct {
     char hostname[96];
     int logical_cores;
 } NodeInfo;
+
+typedef struct {
+    int threads;
+    double duration_ms;
+    double pixels_s;
+    uint64_t total_iterations;
+    double iterations_s;
+} BenchmarkResult;
 
 static const BenchScene BENCH_SCENES[] = {
     {
@@ -75,6 +87,7 @@ static void print_usage(FILE *stream, const char *program)
     fprintf(stream,
         "Usage: %s [--scene easy|medium|hard] [--width N] [--height N] [--max-iter N] [--json]\n"
         "          [--center-re X --center-im Y --scale X] [--threads N]\n"
+        "          [--thread-sweep 1,2,4,8]\n"
         "          [--node-report] [--node-name NAME] [--output FILE]\n",
         program);
 }
@@ -108,6 +121,49 @@ static int parse_double_arg(const char *value, double *out)
     }
 
     *out = parsed;
+    return 0;
+}
+
+static int parse_thread_sweep_arg(const char *value, BenchOptions *options)
+{
+    const char *cursor = value;
+    int count = 0;
+
+    while (*cursor != '\0') {
+        char *end = 0;
+        long parsed = 0;
+
+        errno = 0;
+        parsed = strtol(cursor, &end, 10);
+
+        if (errno != 0 || end == cursor || parsed <= 0 || parsed > 2147483647L) {
+            return -1;
+        }
+
+        if (count >= MAX_THREAD_SWEEP_ITEMS) {
+            fprintf(stderr, "thread sweep supports at most %d entries\n", MAX_THREAD_SWEEP_ITEMS);
+            return -1;
+        }
+
+        options->thread_sweep[count++] = (int)parsed;
+
+        if (*end == ',') {
+            cursor = end + 1;
+            if (*cursor == '\0') {
+                return -1;
+            }
+        } else if (*end == '\0') {
+            cursor = end;
+        } else {
+            return -1;
+        }
+    }
+
+    if (count == 0) {
+        return -1;
+    }
+
+    options->thread_sweep_count = count;
     return 0;
 }
 
@@ -156,6 +212,7 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
     options->json = 0;
     options->node_report = 0;
     options->threads = 1;
+    options->thread_sweep_count = 0;
     options->node_name = 0;
     options->output_path = 0;
 
@@ -206,6 +263,11 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
             if (require_value(i, argc, argv[i]) != 0 || parse_int_arg(argv[++i], &options->threads) != 0) {
                 return -1;
             }
+        } else if (strcmp(argv[i], "--thread-sweep") == 0) {
+            if (require_value(i, argc, argv[i]) != 0 || parse_thread_sweep_arg(argv[++i], options) != 0) {
+                fprintf(stderr, "--thread-sweep expects a comma-separated list of positive integers, e.g. 1,2,4,8\n");
+                return -1;
+            }
         } else if (strcmp(argv[i], "--center-re") == 0) {
             if (require_value(i, argc, argv[i]) != 0 || parse_double_arg(argv[++i], &options->view.center_re) != 0) {
                 return -1;
@@ -234,8 +296,17 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
         return -1;
     }
 
+    if (options->thread_sweep_count > 0) {
+        options->threads = options->thread_sweep[0];
+    }
+
     if (options->node_report && !options->json) {
         fprintf(stderr, "--node-report currently requires --json\n");
+        return -1;
+    }
+
+    if (options->node_report && options->thread_sweep_count > 0) {
+        fprintf(stderr, "--node-report cannot be combined with --thread-sweep yet\n");
         return -1;
     }
 
@@ -274,9 +345,14 @@ static uint64_t sum_iterations(const uint32_t *iterations, size_t count)
     return total;
 }
 
+static const char *backend_name_for_threads(int threads)
+{
+    return threads == 1 ? "scalar_f64" : "scalar_f64_threads";
+}
+
 static const char *bench_backend_name(const BenchOptions *options)
 {
-    return options->threads == 1 ? "scalar_f64" : "scalar_f64_threads";
+    return backend_name_for_threads(options->threads);
 }
 
 static uint32_t fnv1a_update(uint32_t hash, const char *text)
@@ -411,6 +487,28 @@ static int close_report_stream(const BenchOptions *options, FILE *stream)
     return fclose(stream) == 0 ? 0 : -1;
 }
 
+static int run_benchmark_once(const MandelView *view, int threads, uint32_t *iterations, size_t pixel_count, BenchmarkResult *result)
+{
+    const double start_s = monotonic_seconds();
+    const int render_result = threads == 1
+        ? mandel_render_f64(view, iterations)
+        : mandel_render_f64_threads(view, iterations, threads);
+    const double end_s = monotonic_seconds();
+
+    if (render_result != 0 || end_s < start_s) {
+        return -1;
+    }
+
+    const double duration_s = end_s - start_s;
+
+    result->threads = threads;
+    result->duration_ms = duration_s * 1000.0;
+    result->total_iterations = sum_iterations(iterations, pixel_count);
+    result->pixels_s = duration_s > 0.0 ? (double)pixel_count / duration_s : 0.0;
+    result->iterations_s = duration_s > 0.0 ? (double)result->total_iterations / duration_s : 0.0;
+    return 0;
+}
+
 static void print_human_report(FILE *stream, const BenchOptions *options, double duration_ms, double pixels_s, double iterations_s, uint64_t total_iterations)
 {
     fprintf(stream, "MandelFarmGigaBrot benchmark\n");
@@ -426,6 +524,29 @@ static void print_human_report(FILE *stream, const BenchOptions *options, double
     fprintf(stream, "  pixels_s: %.3f\n", pixels_s);
     fprintf(stream, "  total_iterations: %llu\n", (unsigned long long)total_iterations);
     fprintf(stream, "  iterations_s: %.3f\n", iterations_s);
+}
+
+static void print_thread_sweep_human(FILE *stream, const BenchOptions *options, const BenchmarkResult *results, int result_count)
+{
+    const double baseline = result_count > 0 ? results[0].iterations_s : 0.0;
+
+    fprintf(stream, "MandelFarmGigaBrot thread sweep\n");
+    fprintf(stream, "  bench_version: mandelbench.0.1\n");
+    fprintf(stream, "  scene: %s\n", options->scene_name);
+    fprintf(stream, "  resolution: %dx%d\n", options->view.width, options->view.height);
+    fprintf(stream, "  max_iter: %d\n", options->view.max_iter);
+    fprintf(stream, "\n");
+    fprintf(stream, "%8s  %12s  %16s  %8s\n", "Threads", "Time(ms)", "Iter/s", "Speedup");
+
+    for (int i = 0; i < result_count; ++i) {
+        const double speedup = baseline > 0.0 ? results[i].iterations_s / baseline : 0.0;
+
+        fprintf(stream, "%8d  %12.3f  %16.3f  %7.2fx\n",
+            results[i].threads,
+            results[i].duration_ms,
+            results[i].iterations_s,
+            speedup);
+    }
 }
 
 static void print_json_report(FILE *stream, const BenchOptions *options, double duration_ms, double pixels_s, double iterations_s, uint64_t total_iterations)
@@ -450,6 +571,42 @@ static void print_json_report(FILE *stream, const BenchOptions *options, double 
     fprintf(stream, "  \"pixels_s\": %.6f,\n", pixels_s);
     fprintf(stream, "  \"total_iterations\": %llu,\n", (unsigned long long)total_iterations);
     fprintf(stream, "  \"iterations_s\": %.6f\n", iterations_s);
+    fprintf(stream, "}\n");
+}
+
+static void print_thread_sweep_json(FILE *stream, const BenchOptions *options, const BenchmarkResult *results, int result_count)
+{
+    const double baseline = result_count > 0 ? results[0].iterations_s : 0.0;
+
+    fprintf(stream, "{\n");
+    fprintf(stream, "  \"project\": \"MandelFarmGigaBrot\",\n");
+    fprintf(stream, "  \"bench_version\": \"mandelbench.0.1\",\n");
+    fprintf(stream, "  \"type\": \"thread_sweep\",\n");
+    fprintf(stream, "  \"scene\": ");
+    print_json_string(stream, options->scene_name);
+    fprintf(stream, ",\n");
+    fprintf(stream, "  \"width\": %d,\n", options->view.width);
+    fprintf(stream, "  \"height\": %d,\n", options->view.height);
+    fprintf(stream, "  \"max_iter\": %d,\n", options->view.max_iter);
+    fprintf(stream, "  \"results\": [\n");
+
+    for (int i = 0; i < result_count; ++i) {
+        const double speedup = baseline > 0.0 ? results[i].iterations_s / baseline : 0.0;
+
+        fprintf(stream, "    {\n");
+        fprintf(stream, "      \"backend\": ");
+        print_json_string(stream, backend_name_for_threads(results[i].threads));
+        fprintf(stream, ",\n");
+        fprintf(stream, "      \"threads\": %d,\n", results[i].threads);
+        fprintf(stream, "      \"duration_ms\": %.6f,\n", results[i].duration_ms);
+        fprintf(stream, "      \"pixels_s\": %.6f,\n", results[i].pixels_s);
+        fprintf(stream, "      \"total_iterations\": %llu,\n", (unsigned long long)results[i].total_iterations);
+        fprintf(stream, "      \"iterations_s\": %.6f,\n", results[i].iterations_s);
+        fprintf(stream, "      \"speedup\": %.6f\n", speedup);
+        fprintf(stream, "    }%s\n", i + 1 == result_count ? "" : ",");
+    }
+
+    fprintf(stream, "  ]\n");
     fprintf(stream, "}\n");
 }
 
@@ -518,24 +675,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const double start_s = monotonic_seconds();
-    const int render_result = options.threads == 1
-        ? mandel_render_f64(&options.view, iterations)
-        : mandel_render_f64_threads(&options.view, iterations, options.threads);
-    const double end_s = monotonic_seconds();
-
-    if (render_result != 0 || end_s < start_s) {
-        fprintf(stderr, "failed to benchmark Mandelbrot render\n");
-        free(iterations);
-        return 1;
-    }
-
-    const double duration_s = end_s - start_s;
-    const double duration_ms = duration_s * 1000.0;
-    const uint64_t total_iterations = sum_iterations(iterations, pixel_count);
-    const double pixels_s = duration_s > 0.0 ? (double)pixel_count / duration_s : 0.0;
-    const double iterations_s = duration_s > 0.0 ? (double)total_iterations / duration_s : 0.0;
-
     FILE *report_stream = open_report_stream(&options);
 
     if (report_stream == 0) {
@@ -543,15 +682,48 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (options.node_report) {
-        NodeInfo node;
+    if (options.thread_sweep_count > 0) {
+        BenchmarkResult results[MAX_THREAD_SWEEP_ITEMS];
 
-        collect_node_info(&node, options.node_name);
-        print_node_report_json(report_stream, &options, &node, duration_ms, pixels_s, iterations_s);
-    } else if (options.json) {
-        print_json_report(report_stream, &options, duration_ms, pixels_s, iterations_s, total_iterations);
+        /*
+         * Each sweep entry renders the same scene into the same caller-owned
+         * buffer. The previous contents do not matter because each run writes
+         * the full image before metrics are collected.
+         */
+        for (int i = 0; i < options.thread_sweep_count; ++i) {
+            if (run_benchmark_once(&options.view, options.thread_sweep[i], iterations, pixel_count, &results[i]) != 0) {
+                fprintf(stderr, "failed to benchmark Mandelbrot render for %d threads\n", options.thread_sweep[i]);
+                close_report_stream(&options, report_stream);
+                free(iterations);
+                return 1;
+            }
+        }
+
+        if (options.json) {
+            print_thread_sweep_json(report_stream, &options, results, options.thread_sweep_count);
+        } else {
+            print_thread_sweep_human(report_stream, &options, results, options.thread_sweep_count);
+        }
     } else {
-        print_human_report(report_stream, &options, duration_ms, pixels_s, iterations_s, total_iterations);
+        BenchmarkResult result;
+
+        if (run_benchmark_once(&options.view, options.threads, iterations, pixel_count, &result) != 0) {
+            fprintf(stderr, "failed to benchmark Mandelbrot render\n");
+            close_report_stream(&options, report_stream);
+            free(iterations);
+            return 1;
+        }
+
+        if (options.node_report) {
+            NodeInfo node;
+
+            collect_node_info(&node, options.node_name);
+            print_node_report_json(report_stream, &options, &node, result.duration_ms, result.pixels_s, result.iterations_s);
+        } else if (options.json) {
+            print_json_report(report_stream, &options, result.duration_ms, result.pixels_s, result.iterations_s, result.total_iterations);
+        } else {
+            print_human_report(report_stream, &options, result.duration_ms, result.pixels_s, result.iterations_s, result.total_iterations);
+        }
     }
 
     if (close_report_stream(&options, report_stream) != 0) {

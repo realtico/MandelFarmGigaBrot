@@ -173,6 +173,13 @@ Criterios de aceite:
 
 Depois de suportar `--threads`, adicionamos um modo para comparar varias contagens de threads em uma execucao.
 
+Status atual:
+
+```text
+P5-004a concluido: mandel-bench aceita --thread-sweep.
+P5-004b concluido: saidas humana e JSON calculam speedup relativo.
+```
+
 Exemplo:
 
 ```sh
@@ -302,12 +309,12 @@ P5-006b: threads consumindo tiles de uma fila compartilhada
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-004a - thread sweep**.
+Seguir para **P5-005a - tipos basicos de tile**.
 
 Motivo:
 
 - `mandel_render_f64_threads` ja existe e produz resultado equivalente ao single-core;
 - os testes cobrem `thread_count` 1, 2, 3 e mais threads que linhas;
 - `mandel-bench --threads` ja permite medir uma configuracao por vez;
-- agora precisamos comparar varias configuracoes em uma mesma execucao;
-- o proximo foco de aprendizado passa a ser speedup, overhead e limites de paralelismo.
+- `mandel-bench --thread-sweep` ja compara varias configuracoes em uma mesma execucao;
+- o proximo foco de aprendizado passa a ser tiles como unidade de trabalho mais flexivel.
