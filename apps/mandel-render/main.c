@@ -12,6 +12,11 @@ typedef struct {
     const char *output_path;
 } RenderOptions;
 
+/*
+ * The render CLI is intentionally small: it converts command-line parameters
+ * into a MandelView, asks the core renderer for raw iteration counts, then maps
+ * those counts to RGB when writing the final image.
+ */
 static void print_usage(FILE *stream, const char *program)
 {
     fprintf(stream,
@@ -27,6 +32,10 @@ static int parse_int_arg(const char *value, int *out)
     char *end = 0;
     long parsed = 0;
 
+    /*
+     * strtol lets us reject partial values such as "123abc". That keeps the CLI
+     * predictable and avoids silently accepting typos in render dimensions.
+     */
     errno = 0;
     parsed = strtol(value, &end, 10);
 
@@ -43,6 +52,10 @@ static int parse_double_arg(const char *value, double *out)
     char *end = 0;
     double parsed = 0.0;
 
+    /*
+     * View coordinates and scale are doubles because Mandelbrot navigation
+     * quickly needs fractional positions in the complex plane.
+     */
     errno = 0;
     parsed = strtod(value, &end);
 
@@ -66,6 +79,10 @@ static int require_value(int index, int argc, const char *option)
 
 static int parse_options(int argc, char **argv, RenderOptions *options)
 {
+    /*
+     * Defaults render the classic whole-set view. Every flag below overrides
+     * just one field, which makes small experiments cheap from the terminal.
+     */
     options->view = (MandelView){
         .width = 1024,
         .height = 768,
@@ -142,6 +159,11 @@ static int write_ppm_p6(const char *path, const MandelView *view, const uint32_t
         return -1;
     }
 
+    /*
+     * PPM P6 is deliberately simple: a short ASCII header followed by raw RGB
+     * bytes. The renderer stores iteration counts, not colors, so this is the
+     * final presentation step where the palette is applied.
+     */
     for (int y = 0; y < view->height; ++y) {
         for (int x = 0; x < view->width; ++x) {
             uint8_t rgb[3] = {0, 0, 0};
@@ -180,6 +202,10 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /*
+     * Keep rendering and image encoding separate. Later backends can fill the
+     * same iterations buffer without changing the PPM writer.
+     */
     if (mandel_render_f64(&options.view, iterations) != 0) {
         fprintf(stderr, "failed to render Mandelbrot view\n");
         free(iterations);

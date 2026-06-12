@@ -51,6 +51,11 @@ typedef struct {
     int repeat;
 } BenchmarkResult;
 
+/*
+ * Benchmark scenes are canned workloads. They are useful because performance
+ * discussions need stable inputs: changing the view can change the amount of
+ * Mandelbrot work per pixel dramatically.
+ */
 static const BenchScene BENCH_SCENES[] = {
     {
         .name = "easy",
@@ -102,6 +107,10 @@ static int parse_int_arg(const char *value, int *out)
     char *end = 0;
     long parsed = 0;
 
+    /*
+     * Reject partial parses such as "8threads". Benchmarks are only useful when
+     * the recorded configuration is exactly what the user requested.
+     */
     errno = 0;
     parsed = strtol(value, &end, 10);
 
@@ -118,6 +127,7 @@ static int parse_double_arg(const char *value, double *out)
     char *end = 0;
     double parsed = 0.0;
 
+    /* Coordinates and scale are fractional values in the complex plane. */
     errno = 0;
     parsed = strtod(value, &end);
 
@@ -134,6 +144,10 @@ static int parse_thread_sweep_arg(const char *value, BenchOptions *options)
     const char *cursor = value;
     int count = 0;
 
+    /*
+     * --thread-sweep is a compact comma-separated list because it is commonly
+     * typed by hand while exploring scaling curves: 1,2,4,8,10,12,16...
+     */
     while (*cursor != '\0') {
         char *end = 0;
         long parsed = 0;
@@ -211,6 +225,11 @@ static int apply_scene(BenchOptions *options, const char *scene_name)
 
 static int parse_options(int argc, char **argv, BenchOptions *options)
 {
+    /*
+     * Parse --scene first so later dimension flags can override the selected
+     * preset. Example: --scene hard --width 512 keeps the hard center/scale but
+     * makes the benchmark smaller.
+     */
     if (apply_scene(options, "medium") != 0) {
         return -1;
     }
@@ -230,6 +249,10 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
         }
     }
 
+    /*
+     * Second pass applies all other flags. We deliberately skip --scene here
+     * because it was already consumed in the first pass.
+     */
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--help") == 0) {
             print_usage(stdout, argv[0]);
@@ -312,6 +335,11 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
     }
 
     if (options->thread_sweep_count > 0) {
+        /*
+         * The first sweep entry is the baseline shown in shared fields such as
+         * bench_backend_name(). Individual rows still keep their own thread
+         * count.
+         */
         options->threads = options->thread_sweep[0];
     }
 
@@ -333,6 +361,10 @@ static double monotonic_seconds(void)
 #if defined(CLOCK_MONOTONIC)
     struct timespec ts;
 
+    /*
+     * Wall-clock time can jump if the system clock changes. A monotonic clock
+     * only moves forward, which is what a benchmark duration needs.
+     */
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
         return 0.0;
     }
@@ -353,6 +385,11 @@ static uint64_t sum_iterations(const uint32_t *iterations, size_t count)
 {
     uint64_t total = 0;
 
+    /*
+     * The sum is not used to render the image; it is a workload metric. Two
+     * views with the same resolution can have very different total iteration
+     * counts depending on how much of the set they touch.
+     */
     for (size_t i = 0; i < count; ++i) {
         total += iterations[i];
     }
@@ -372,6 +409,10 @@ static const char *bench_backend_name(const BenchOptions *options)
 
 static uint32_t fnv1a_update(uint32_t hash, const char *text)
 {
+    /*
+     * Tiny non-cryptographic hash used only to make local node IDs less likely
+     * to collide. This is not a security boundary.
+     */
     while (*text != '\0') {
         hash ^= (uint8_t)*text;
         hash *= 16777619u;
@@ -398,6 +439,10 @@ static void make_node_id(char *dst, size_t dst_size, const char *node_name, uint
         return;
     }
 
+    /*
+     * Normalize names into a simple identifier shape so future reports are easy
+     * to compare in scripts and logs.
+     */
     for (const char *p = node_name; *p != '\0' && used + 1 < dst_size; ++p) {
         const unsigned char ch = (unsigned char)*p;
 
@@ -422,6 +467,10 @@ static void print_json_string(FILE *stream, const char *text)
 {
     fputc('"', stream);
 
+    /*
+     * We do not pull a JSON library into this tiny C tool yet, so strings need
+     * explicit escaping before they are written into reports.
+     */
     for (const char *p = text; p != 0 && *p != '\0'; ++p) {
         const unsigned char ch = (unsigned char)*p;
 
@@ -450,6 +499,10 @@ static void collect_node_info(NodeInfo *node, const char *configured_name)
     char hostname[sizeof(node->hostname)];
     long cores = -1;
 
+    /*
+     * Node reports are local capability snapshots. They are not sent anywhere
+     * yet, but this shape prepares the future farm agent protocol.
+     */
     if (gethostname(hostname, sizeof(hostname)) != 0) {
         copy_string(hostname, sizeof(hostname), "unknown-host");
     }
@@ -480,6 +533,10 @@ static void collect_node_info(NodeInfo *node, const char *configured_name)
 
 static FILE *open_report_stream(const BenchOptions *options)
 {
+    /*
+     * All report printers write to FILE*. That keeps stdout and --output using
+     * exactly the same formatting code.
+     */
     if (options->output_path == 0) {
         return stdout;
     }
@@ -504,6 +561,10 @@ static int close_report_stream(const BenchOptions *options, FILE *stream)
 
 static int run_benchmark_once(const MandelView *view, int threads, uint32_t *iterations, size_t pixel_count, BenchmarkResult *result)
 {
+    /*
+     * This measures the render call only. Allocation and report formatting stay
+     * outside the timed section so the number reflects the backend itself.
+     */
     const double start_s = monotonic_seconds();
     const int render_result = threads == 1
         ? mandel_render_f64(view, iterations)
@@ -591,6 +652,10 @@ static void print_thread_sweep_human(FILE *stream, const BenchOptions *options, 
 {
     const double baseline = result_count > 0 ? results[0].iterations_s : 0.0;
 
+    /*
+     * Speedup is relative to the first sweep entry, not necessarily to one
+     * thread. That lets users compare any sequence they choose.
+     */
     fprintf(stream, "MandelFarmGigaBrot thread sweep\n");
     fprintf(stream, "  bench_version: mandelbench.0.1\n");
     fprintf(stream, "  scene: %s\n", options->scene_name);
@@ -766,6 +831,9 @@ int main(int argc, char **argv)
          * Each sweep entry renders the same scene into the same caller-owned
          * buffer. The previous contents do not matter because each run writes
          * the full image before metrics are collected.
+         *
+         * Conceptually this answers: "for this same problem, how does changing
+         * only the thread count affect throughput?"
          */
         for (int i = 0; i < options.thread_sweep_count; ++i) {
             if (run_benchmark_repeated(&options.view, options.thread_sweep[i], options.repeat, iterations, pixel_count, &results[i]) != 0) {
@@ -784,6 +852,11 @@ int main(int argc, char **argv)
     } else {
         BenchmarkResult result;
 
+        /*
+         * Non-sweep mode measures one backend configuration. It is the path used
+         * by plain human output, JSON output, and the local node capability
+         * report.
+         */
         if (run_benchmark_repeated(&options.view, options.threads, options.repeat, iterations, pixel_count, &result) != 0) {
             fprintf(stderr, "failed to benchmark Mandelbrot render\n");
             close_report_stream(&options, report_stream);
