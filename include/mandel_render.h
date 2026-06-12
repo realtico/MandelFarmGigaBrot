@@ -32,6 +32,19 @@ int mandel_render_f64(const MandelView *view, uint32_t *iterations);
 int mandel_render_region_f64(const MandelView *view, uint32_t *iterations, int y_start, int y_end);
 
 /*
+ * Renders one rectangular tile of the requested view.
+ *
+ * The tile must fit entirely inside the image bounds described by view. Pixels
+ * are still written into the full image buffer, not into a compact tile-local
+ * buffer. This keeps tile rendering composable: rendering all tiles into the
+ * same output buffer should reconstruct the same image as mandel_render_f64().
+ *
+ * Returns 0 on success and -1 when the view, output buffer, or tile rectangle
+ * is invalid.
+ */
+int mandel_render_tile_f64(const MandelView *view, uint32_t *iterations, const MandelTile *tile);
+
+/*
  * Renders the full view using horizontal row bands distributed across threads.
  *
  * Each worker receives a non-overlapping [y_start, y_end) interval and writes

@@ -204,7 +204,7 @@ Aprendizados:
 - limites de paralelismo;
 - diferenca entre cores fisicos e logicos;
 - por que `8 threads` nem sempre significa `8x` mais desempenho;
-- como workload pequeno pode distorcer benchmark.
+- como workload pequeno pode distorcer benchmark;
 - por que repetir medicoes ajuda a separar desempenho real de ruido do sistema operacional;
 - diferenca entre melhor tempo, tempo medio e pior tempo.
 
@@ -213,12 +213,20 @@ Criterios de aceite:
 - mede cada configuracao separadamente;
 - calcula speedup relativo a 1 thread;
 - tem saida humana legivel;
-- tem saida JSON opcional.
+- tem saida JSON opcional;
 - aceita `--repeat N` para executar cada configuracao varias vezes.
 
 ## P5.5 - Preparar Tiles Locais
 
 Depois das faixas horizontais, introduzimos tiles locais.
+
+Status atual:
+
+```text
+P5-005a concluido: MandelTile foi criado.
+P5-005b concluido: mandel_render_tile_f64 renderiza um retangulo local.
+P5-005c concluido: testes provam equivalencia tile vs render completo.
+```
 
 Exemplo:
 
@@ -253,8 +261,8 @@ Possivel funcao:
 ```c
 int mandel_render_tile_f64(
     const MandelView *view,
-    const MandelTile *tile,
-    uint32_t *iterations
+    uint32_t *iterations,
+    const MandelTile *tile
 );
 ```
 
@@ -263,6 +271,16 @@ Criterios de aceite:
 - render por tiles em sequencia produz o mesmo resultado do render completo;
 - tiles 64, 128, 256 e 512 sao suportados;
 - bordas da imagem funcionam mesmo quando a resolucao nao e multipla do tamanho do tile.
+
+Como rodar este marco:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Neste momento os tiles ainda nao aparecem como opcao de CLI. Eles existem como API de renderizacao e base para o proximo passo: fila de tiles concorrente.
 
 ## P5.6 - Fila De Tiles Concorrente
 
@@ -314,7 +332,7 @@ P5-006b: threads consumindo tiles de uma fila compartilhada
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-005a - tipos basicos de tile**.
+Seguir para **P5-006a - fila local de tiles**.
 
 Motivo:
 
@@ -323,4 +341,5 @@ Motivo:
 - `mandel-bench --threads` ja permite medir uma configuracao por vez;
 - `mandel-bench --thread-sweep` ja compara varias configuracoes em uma mesma execucao;
 - `mandel-bench --repeat` ja reduz ruido e ajuda a enxergar plateau de desempenho;
-- o proximo foco de aprendizado passa a ser tiles como unidade de trabalho mais flexivel.
+- `MandelTile` e `mandel_render_tile_f64` ja existem e preservam o resultado do render completo;
+- o proximo foco de aprendizado passa a ser uma fila compartilhada de tiles consumida por threads.

@@ -16,4 +16,19 @@ typedef struct {
     int max_iter;
 } MandelView;
 
+/*
+ * Describes a rectangular pixel region inside a MandelView.
+ *
+ * x and y are measured from the top-left corner of the output image. width and
+ * height are measured in pixels. Tiles are the next step after horizontal row
+ * regions: they are small work units that can later be placed in a queue and
+ * consumed by local or remote workers.
+ */
+typedef struct {
+    int x;
+    int y;
+    int width;
+    int height;
+} MandelTile;
+
 #endif

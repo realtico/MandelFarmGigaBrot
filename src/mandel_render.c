@@ -23,6 +23,54 @@ static int mandel_view_is_valid(const MandelView *view)
         view->max_iter > 0;
 }
 
+static int mandel_tile_is_valid(const MandelView *view, const MandelTile *tile)
+{
+    return tile != 0 &&
+        tile->x >= 0 &&
+        tile->y >= 0 &&
+        tile->width > 0 &&
+        tile->height > 0 &&
+        tile->width <= view->width - tile->x &&
+        tile->height <= view->height - tile->y;
+}
+
+static void mandel_render_rect_f64(
+    const MandelView *view,
+    uint32_t *iterations,
+    int x_start,
+    int y_start,
+    int x_end,
+    int y_end)
+{
+    /*
+     * scale is the horizontal span in the complex plane. The vertical span is
+     * derived from the image aspect ratio so a square in math space does not
+     * become stretched on rectangular images.
+     */
+    const double complex_width = view->scale;
+    const double complex_height = view->scale * (double)view->height / (double)view->width;
+    const double min_re = view->center_re - complex_width * 0.5;
+    const double max_im = view->center_im + complex_height * 0.5;
+
+    /*
+     * Only the selected rectangle is written. This function is the shared core
+     * for row regions and tiles, so both work units use exactly the same pixel
+     * mapping and escape calculation.
+     */
+    for (int y = y_start; y < y_end; ++y) {
+        /* Sample at pixel centers; y grows downward while imaginary values grow upward. */
+        const double ci = max_im - ((double)y + 0.5) * complex_height / (double)view->height;
+
+        for (int x = x_start; x < x_end; ++x) {
+            /* Convert the pixel column into the real component of c. */
+            const double cr = min_re + ((double)x + 0.5) * complex_width / (double)view->width;
+            const int iter = mandel_escape_f64(cr, ci, view->max_iter);
+
+            iterations[(size_t)y * (size_t)view->width + (size_t)x] = (uint32_t)iter;
+        }
+    }
+}
+
 static void *mandel_render_thread_main(void *arg)
 {
     MandelThreadJob *job = arg;
@@ -55,34 +103,28 @@ int mandel_render_region_f64(const MandelView *view, uint32_t *iterations, int y
         return -1;
     }
 
-    /*
-     * scale is the horizontal span in the complex plane. The vertical span is
-     * derived from the image aspect ratio so a square in math space does not
-     * become stretched on rectangular images.
-     */
-    const double complex_width = view->scale;
-    const double complex_height = view->scale * (double)view->height / (double)view->width;
-    const double min_re = view->center_re - complex_width * 0.5;
-    const double max_im = view->center_im + complex_height * 0.5;
+    mandel_render_rect_f64(view, iterations, 0, y_start, view->width, y_end);
+    return 0;
+}
 
-    /*
-     * Only the selected rows are written. This is what makes region rendering a
-     * safe building block for future threads: if two regions do not overlap,
-     * they do not write to the same buffer positions.
-     */
-    for (int y = y_start; y < y_end; ++y) {
-        /* Sample at pixel centers; y grows downward while imaginary values grow upward. */
-        const double ci = max_im - ((double)y + 0.5) * complex_height / (double)view->height;
-
-        for (int x = 0; x < view->width; ++x) {
-            /* Convert the pixel column into the real component of c. */
-            const double cr = min_re + ((double)x + 0.5) * complex_width / (double)view->width;
-            const int iter = mandel_escape_f64(cr, ci, view->max_iter);
-
-            iterations[(size_t)y * (size_t)view->width + (size_t)x] = (uint32_t)iter;
-        }
+int mandel_render_tile_f64(const MandelView *view, uint32_t *iterations, const MandelTile *tile)
+{
+    if (!mandel_view_is_valid(view) || iterations == 0 || !mandel_tile_is_valid(view, tile)) {
+        return -1;
     }
 
+    /*
+     * A tile writes into its real image position, not into a compact temporary
+     * buffer. That is what will let many tiles, computed in any order, assemble
+     * the final image in the shared iterations array.
+     */
+    mandel_render_rect_f64(
+        view,
+        iterations,
+        tile->x,
+        tile->y,
+        tile->x + tile->width,
+        tile->y + tile->height);
     return 0;
 }
 

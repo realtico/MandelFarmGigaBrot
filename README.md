@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, `mandel-render` PPM CLI, `mandel-bench` local benchmark, and local node capability reports.
+Initial project structure, pure C Mandelbrot escape core, viewport and tile types, local buffer renderer, Nanquim demo, `mandel-render` PPM CLI, `mandel-bench` local benchmark, and local node capability reports.
 
 ## Planned Binaries
 
@@ -107,6 +107,19 @@ Compare several thread counts in one benchmark run:
 ```
 
 The sweep reports speedup relative to the first thread count in the list. `duration_ms` is the best observed run for that configuration; `duration_ms_avg` and `duration_ms_worst` help reveal scheduler noise and outliers.
+
+The local tile renderer is currently exposed as C API and covered by unit tests. It is the base for the future queued tile worker:
+
+```c
+MandelTile tile = {
+    .x = 0,
+    .y = 0,
+    .width = 256,
+    .height = 256,
+};
+
+mandel_render_tile_f64(&view, iterations, &tile);
+```
 
 Generate a local node capability report:
 
