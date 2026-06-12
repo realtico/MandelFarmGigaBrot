@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, and Nanquim demo.
+Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, and `mandel-render` PPM CLI.
 
 ## Planned Binaries
 
@@ -45,6 +45,19 @@ cmake --build build
 ./build/bin/mandelbrot_demo
 ```
 
-There is no CLI renderer binary yet. At this stage, the Mandelbrot core and buffer renderer are exercised through unit tests, and the visual path is available through `mandelbrot_demo`.
+Render a PPM image from the command line:
+
+```sh
+./build/bin/mandel-render \
+  --width 2048 \
+  --height 2048 \
+  --center-re -0.5 \
+  --center-im 0.0 \
+  --scale 3.0 \
+  --max-iter 1000 \
+  --output assets/output/mandel.ppm
+```
+
+At this stage, `mandel-render` writes binary PPM P6 files. The Nanquim demo and CLI renderer share the same palette.
 
 Each completed milestone should include updated run instructions for the binaries and demos available at that point.

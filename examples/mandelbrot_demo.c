@@ -1,3 +1,4 @@
+#include "mandel_palette.h"
 #include "mandel_render.h"
 
 #include "nanquim.h"
@@ -12,26 +13,6 @@ enum {
     DEMO_MAX_ITER = 256,
 };
 
-static void iteration_to_rgb(uint32_t iter, uint32_t max_iter, uint8_t *r, uint8_t *g, uint8_t *b)
-{
-    if (iter >= max_iter) {
-        *r = 0;
-        *g = 0;
-        *b = 0;
-        return;
-    }
-
-    /*
-     * Temporary demo palette: low iterations are dark blue, later escapes move
-     * through cyan and warm highlights. A shared palette module arrives in P2.
-     */
-    const uint32_t t = (iter * 255u) / max_iter;
-
-    *r = (uint8_t)((t * t) / 255u);
-    *g = (uint8_t)t;
-    *b = (uint8_t)(80u + ((255u - t) / 2u));
-}
-
 static void draw_iterations(const uint32_t *iterations, int width, int height, uint32_t max_iter)
 {
     for (int y = 0; y < height; ++y) {
@@ -41,7 +22,7 @@ static void draw_iterations(const uint32_t *iterations, int width, int height, u
             uint8_t b = 0;
             const uint32_t iter = iterations[(size_t)y * (size_t)width + (size_t)x];
 
-            iteration_to_rgb(iter, max_iter, &r, &g, &b);
+            mandel_palette_rgb(iter, max_iter, &r, &g, &b);
             nq_color(r, g, b);
             nq_pset((float)x, (float)y);
         }
