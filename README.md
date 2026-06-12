@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure only. No Mandelbrot implementation has been added yet.
+Initial project structure, pure C Mandelbrot escape core, and viewport type.
 
 ## Planned Binaries
 
@@ -27,3 +27,14 @@ Initial project structure only. No Mandelbrot implementation has been added yet.
 - 0.4: local multicore renderer.
 - 0.5: numeric backend comparison.
 
+## Build And Test
+
+From the repository root:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Each completed milestone should include updated run instructions for the binaries and demos available at that point.

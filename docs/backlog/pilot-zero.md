@@ -11,6 +11,8 @@ The Pilot Zero goal is to create the smallest useful version of MandelFarmGigaBr
 
 ## Milestones
 
+Each milestone should end with documented run instructions in the README, including the exact build, test, demo, and CLI commands available at that point.
+
 ### 0.1 - Visible Local Mandelbrot
 
 - P0-001: pure C Mandelbrot math core.
@@ -44,4 +46,3 @@ The Pilot Zero goal is to create the smallest useful version of MandelFarmGigaBr
 - P6-001: `scalar_f32`.
 - P6-002: `mandel-compare`.
 - P6-003: fixed-point backend planning.
-
