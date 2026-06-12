@@ -129,6 +129,18 @@ With `--scheduler tiles`, workers repeatedly take the next tile from a shared qu
   --repeat 5
 ```
 
+Study tile granularity with a fixed number of worker threads:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --threads 10 \
+  --tile-sweep 16,32,64,128,256,512 \
+  --repeat 5
+```
+
+`--tile-sweep` implies the tile scheduler and reports how many tile jobs each size creates.
+
 The local tile renderer is also exposed as C API and covered by unit tests:
 
 ```c

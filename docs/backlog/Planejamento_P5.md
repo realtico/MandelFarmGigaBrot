@@ -354,6 +354,45 @@ Comparar fila dinamica de tiles:
   --repeat 5
 ```
 
+## P5.7 - Tile Sweep
+
+Depois de comparar schedulers, precisamos estudar a granularidade dos tiles.
+
+Status atual:
+
+```text
+P5-007a concluido: mandel-bench aceita --tile-sweep.
+P5-007b concluido: saida humana mostra tamanho do tile e quantidade de tiles.
+P5-007c concluido: saida JSON registra tile_size, tile_count e speedup relativo.
+```
+
+Ideia:
+
+```text
+threads fixas
+varios tamanhos de tile
+mesma cena
+mesmo renderer dinamico
+comparar overhead vs balanceamento
+```
+
+Aprendizados:
+
+- tiles pequenos aumentam a quantidade de trabalhos e o trafego na fila;
+- tiles grandes reduzem overhead, mas podem deixar threads ociosas;
+- `tile_count` precisa ser grande o suficiente para alimentar as threads;
+- o melhor tile depende da cena, resolucao, max_iter e maquina.
+
+Exemplo:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --threads 10 \
+  --tile-sweep 16,32,64,128,256,512 \
+  --repeat 5
+```
+
 ## Backlog Replanejado
 
 ```text
@@ -377,15 +416,49 @@ P5-005c: equivalencia tile vs render completo
 P5-006a: fila local de tiles
 P5-006b: threads consumindo tiles de uma fila compartilhada
 P5-006c: benchmark comparando scheduler bands vs tiles
+
+P5-007a: mandel-bench aceita --tile-sweep
+P5-007b: saida humana mostra tamanho do tile e quantidade de tiles
+P5-007c: saida JSON registra tile_size, tile_count e speedup relativo
 ```
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-007 - estudar granularidade e overhead de tiles**.
+Seguir para **P5-008 - registrar estudos locais de desempenho**.
 
 Motivo:
 
 - ja temos scheduler fixo por faixas;
 - ja temos scheduler dinamico por fila de tiles;
-- agora vale medir como `--tile-size 32`, `64`, `128`, `256` e `512` mudam overhead, balanceamento e throughput;
-- esse estudo prepara uma escolha mais consciente antes de levar tiles para uma arquitetura distribuida.
+- `--tile-sweep` ja mede como `16`, `32`, `64`, `128`, `256` e `512` mudam overhead, balanceamento e throughput;
+- o proximo passo natural e guardar resultados e observacoes em docs para comparar maquinas, cenas e tamanhos de tiles sem depender apenas do historico do terminal.
+
+Como rodar este marco:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Estudar granularidade de tiles:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --threads 10 \
+  --tile-sweep 16,32,64,128,256,512 \
+  --repeat 5
+```
+
+Gerar JSON para analise posterior:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --threads 10 \
+  --tile-sweep 16,32,64,128,256,512 \
+  --repeat 5 \
+  --json \
+  --output assets/output/tile-sweep-hard.json
+```
