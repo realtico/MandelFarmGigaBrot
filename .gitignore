@@ -1,0 +1,27 @@
+# Build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# Compiled artifacts
+*.a
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Generated render outputs
+assets/output/*
+!assets/output/.gitkeep
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+
