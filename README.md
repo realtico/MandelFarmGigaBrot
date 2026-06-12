@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, `mandel-render` PPM CLI, and `mandel-bench` local benchmark.
+Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, `mandel-render` PPM CLI, `mandel-bench` local benchmark, and local node capability reports.
 
 ## Planned Binaries
 
@@ -83,5 +83,18 @@ Emit JSON for scripts or future node reports:
 ```
 
 Available benchmark scenes are `easy`, `medium`, and `hard`. The current backend name is `scalar_f64`.
+
+Generate a local node capability report:
+
+```sh
+./build/bin/mandel-bench \
+  --scene medium \
+  --json \
+  --node-report \
+  --node-name "$(hostname)" \
+  --output assets/output/node-report.json
+```
+
+The node report does not publish anything to the network. It records local identity, current scalar capabilities, and benchmark throughput in the future `mandelfarm.v1` shape.
 
 Each completed milestone should include updated run instructions for the binaries and demos available at that point.

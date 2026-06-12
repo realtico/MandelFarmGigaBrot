@@ -130,6 +130,27 @@ add_test(
         --height 48
         --json
 )
+add_test(
+    NAME mandel_node_report_json
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --json
+        --node-report
+        --node-name test-node
+)
+add_test(
+    NAME mandel_node_report_output
+    COMMAND mandel-bench
+        --scene easy
+        --width 32
+        --height 24
+        --json
+        --node-report
+        --node-name test-node
+        --output "${CMAKE_BINARY_DIR}/node-report-smoke.json"
+)
 
 set_target_properties(mandel-render PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
