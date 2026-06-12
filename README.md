@@ -73,16 +73,17 @@ Run a smaller custom benchmark:
   --scene hard \
   --width 1024 \
   --height 768 \
-  --max-iter 2000
+  --max-iter 2000 \
+  --threads 4
 ```
 
 Emit JSON for scripts or future node reports:
 
 ```sh
-./build/bin/mandel-bench --scene hard --json
+./build/bin/mandel-bench --scene hard --threads 4 --json
 ```
 
-Available benchmark scenes are `easy`, `medium`, and `hard`. The current backend name is `scalar_f64`.
+Available benchmark scenes are `easy`, `medium`, and `hard`. Use `--threads N` to run the row-band pthread renderer. The backend is reported as `scalar_f64` for one thread and `scalar_f64_threads` for multiple threads.
 
 Generate a local node capability report:
 
@@ -92,6 +93,7 @@ Generate a local node capability report:
   --json \
   --node-report \
   --node-name "$(hostname)" \
+  --threads 4 \
   --output assets/output/node-report.json
 ```
 

@@ -125,6 +125,13 @@ Criterios de aceite:
 
 Depois do render multithread, o `mandel-bench` deve aceitar:
 
+Status atual:
+
+```text
+P5-003a concluido: mandel-bench aceita --threads.
+P5-003b concluido: saidas humana, JSON e node report registram backend/threads.
+```
+
 ```sh
 ./build/bin/mandel-bench --scene medium --threads 4
 ```
@@ -295,11 +302,12 @@ P5-006b: threads consumindo tiles de uma fila compartilhada
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-003a - mandel-bench --threads**.
+Seguir para **P5-004a - thread sweep**.
 
 Motivo:
 
 - `mandel_render_f64_threads` ja existe e produz resultado equivalente ao single-core;
 - os testes cobrem `thread_count` 1, 2, 3 e mais threads que linhas;
-- agora precisamos medir speedup e expor `--threads` no benchmark;
-- o proximo foco de aprendizado passa a ser observar desempenho real e overhead.
+- `mandel-bench --threads` ja permite medir uma configuracao por vez;
+- agora precisamos comparar varias configuracoes em uma mesma execucao;
+- o proximo foco de aprendizado passa a ser speedup, overhead e limites de paralelismo.

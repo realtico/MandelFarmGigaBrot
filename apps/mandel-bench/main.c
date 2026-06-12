@@ -20,6 +20,7 @@ typedef struct {
     const char *scene_name;
     int json;
     int node_report;
+    int threads;
     const char *node_name;
     const char *output_path;
 } BenchOptions;
@@ -73,7 +74,7 @@ static void print_usage(FILE *stream, const char *program)
 {
     fprintf(stream,
         "Usage: %s [--scene easy|medium|hard] [--width N] [--height N] [--max-iter N] [--json]\n"
-        "          [--center-re X --center-im Y --scale X]\n"
+        "          [--center-re X --center-im Y --scale X] [--threads N]\n"
         "          [--node-report] [--node-name NAME] [--output FILE]\n",
         program);
 }
@@ -154,6 +155,7 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
     }
     options->json = 0;
     options->node_report = 0;
+    options->threads = 1;
     options->node_name = 0;
     options->output_path = 0;
 
@@ -200,6 +202,10 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
             if (require_value(i, argc, argv[i]) != 0 || parse_int_arg(argv[++i], &options->view.max_iter) != 0) {
                 return -1;
             }
+        } else if (strcmp(argv[i], "--threads") == 0) {
+            if (require_value(i, argc, argv[i]) != 0 || parse_int_arg(argv[++i], &options->threads) != 0) {
+                return -1;
+            }
         } else if (strcmp(argv[i], "--center-re") == 0) {
             if (require_value(i, argc, argv[i]) != 0 || parse_double_arg(argv[++i], &options->view.center_re) != 0) {
                 return -1;
@@ -220,6 +226,11 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
 
     if (options->view.width <= 0 || options->view.height <= 0 || options->view.scale <= 0.0 || options->view.max_iter <= 0) {
         fprintf(stderr, "width, height, scale, and max-iter must be positive\n");
+        return -1;
+    }
+
+    if (options->threads <= 0) {
+        fprintf(stderr, "threads must be positive\n");
         return -1;
     }
 
@@ -261,6 +272,11 @@ static uint64_t sum_iterations(const uint32_t *iterations, size_t count)
     }
 
     return total;
+}
+
+static const char *bench_backend_name(const BenchOptions *options)
+{
+    return options->threads == 1 ? "scalar_f64" : "scalar_f64_threads";
 }
 
 static uint32_t fnv1a_update(uint32_t hash, const char *text)
@@ -399,7 +415,8 @@ static void print_human_report(FILE *stream, const BenchOptions *options, double
 {
     fprintf(stream, "MandelFarmGigaBrot benchmark\n");
     fprintf(stream, "  bench_version: mandelbench.0.1\n");
-    fprintf(stream, "  backend: scalar_f64\n");
+    fprintf(stream, "  backend: %s\n", bench_backend_name(options));
+    fprintf(stream, "  threads: %d\n", options->threads);
     fprintf(stream, "  scene: %s\n", options->scene_name);
     fprintf(stream, "  resolution: %dx%d\n", options->view.width, options->view.height);
     fprintf(stream, "  center: %.15g, %.15g\n", options->view.center_re, options->view.center_im);
@@ -416,7 +433,10 @@ static void print_json_report(FILE *stream, const BenchOptions *options, double 
     fprintf(stream, "{\n");
     fprintf(stream, "  \"project\": \"MandelFarmGigaBrot\",\n");
     fprintf(stream, "  \"bench_version\": \"mandelbench.0.1\",\n");
-    fprintf(stream, "  \"backend\": \"scalar_f64\",\n");
+    fprintf(stream, "  \"backend\": ");
+    print_json_string(stream, bench_backend_name(options));
+    fprintf(stream, ",\n");
+    fprintf(stream, "  \"threads\": %d,\n", options->threads);
     fprintf(stream, "  \"scene\": ");
     print_json_string(stream, options->scene_name);
     fprintf(stream, ",\n");
@@ -459,12 +479,15 @@ static void print_node_report_json(FILE *stream, const BenchOptions *options, co
     fprintf(stream, "  },\n");
     fprintf(stream, "  \"capabilities\": {\n");
     fprintf(stream, "    \"backends\": [\"scalar_f64\"],\n");
-    fprintf(stream, "    \"threading\": false,\n");
+    fprintf(stream, "    \"threading\": true,\n");
     fprintf(stream, "    \"result_formats\": [\"u32_iter\"]\n");
     fprintf(stream, "  },\n");
     fprintf(stream, "  \"benchmark\": {\n");
     fprintf(stream, "    \"bench_version\": \"mandelbench.0.1\",\n");
-    fprintf(stream, "    \"backend\": \"scalar_f64\",\n");
+    fprintf(stream, "    \"backend\": ");
+    print_json_string(stream, bench_backend_name(options));
+    fprintf(stream, ",\n");
+    fprintf(stream, "    \"threads\": %d,\n", options->threads);
     fprintf(stream, "    \"scene\": ");
     print_json_string(stream, options->scene_name);
     fprintf(stream, ",\n");
@@ -496,7 +519,9 @@ int main(int argc, char **argv)
     }
 
     const double start_s = monotonic_seconds();
-    const int render_result = mandel_render_f64(&options.view, iterations);
+    const int render_result = options.threads == 1
+        ? mandel_render_f64(&options.view, iterations)
+        : mandel_render_f64_threads(&options.view, iterations, options.threads);
     const double end_s = monotonic_seconds();
 
     if (render_result != 0 || end_s < start_s) {

@@ -127,6 +127,7 @@ add_test(
         --height 48
         --max-iter 128
         --scene medium
+        --threads 2
 )
 add_test(
     NAME mandel_bench_json
@@ -134,6 +135,7 @@ add_test(
         --scene hard
         --width 64
         --height 48
+        --threads 3
         --json
 )
 add_test(
@@ -145,6 +147,7 @@ add_test(
         --json
         --node-report
         --node-name test-node
+        --threads 2
 )
 add_test(
     NAME mandel_node_report_output
