@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, viewport type, and local buffer renderer.
+Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, and Nanquim demo.
 
 ## Planned Binaries
 
@@ -37,6 +37,14 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-There is no user-facing renderer binary yet. At this stage, the Mandelbrot core and buffer renderer are exercised through unit tests.
+The Nanquim demo is built when a local Nanquim checkout is available. By default CMake looks for it at `../Nanquim`; use `NANQUIM_ROOT` if your checkout lives elsewhere:
+
+```sh
+cmake -S . -B build -DNANQUIM_ROOT="$HOME/Work/Nanquim"
+cmake --build build
+./build/bin/mandelbrot_demo
+```
+
+There is no CLI renderer binary yet. At this stage, the Mandelbrot core and buffer renderer are exercised through unit tests, and the visual path is available through `mandelbrot_demo`.
 
 Each completed milestone should include updated run instructions for the binaries and demos available at that point.
