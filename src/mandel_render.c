@@ -15,7 +15,20 @@ static int mandel_view_is_valid(const MandelView *view)
 
 int mandel_render_f64(const MandelView *view, uint32_t *iterations)
 {
+    if (!mandel_view_is_valid(view)) {
+        return -1;
+    }
+
+    return mandel_render_region_f64(view, iterations, 0, view->height);
+}
+
+int mandel_render_region_f64(const MandelView *view, uint32_t *iterations, int y_start, int y_end)
+{
     if (!mandel_view_is_valid(view) || iterations == 0) {
+        return -1;
+    }
+
+    if (y_start < 0 || y_end < y_start || y_end > view->height) {
         return -1;
     }
 
@@ -29,7 +42,12 @@ int mandel_render_f64(const MandelView *view, uint32_t *iterations)
     const double min_re = view->center_re - complex_width * 0.5;
     const double max_im = view->center_im + complex_height * 0.5;
 
-    for (int y = 0; y < view->height; ++y) {
+    /*
+     * Only the selected rows are written. This is what makes region rendering a
+     * safe building block for future threads: if two regions do not overlap,
+     * they do not write to the same buffer positions.
+     */
+    for (int y = y_start; y < y_end; ++y) {
         /* Sample at pixel centers; y grows downward while imaginary values grow upward. */
         const double ci = max_im - ((double)y + 0.5) * complex_height / (double)view->height;
 

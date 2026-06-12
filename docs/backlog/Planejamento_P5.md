@@ -30,6 +30,13 @@ O ponto central e que Mandelbrot e altamente paralelizavel: cada pixel pode ser 
 
 Antes de criar threads, precisamos ensinar o renderizador a calcular apenas um pedaco da imagem.
 
+Status atual:
+
+```text
+P5-001a concluido: mandel_render_region_f64 foi criada.
+P5-001b concluido: testes de equivalencia foram adicionados.
+```
+
 Assinatura sugerida:
 
 ```c
@@ -281,12 +288,11 @@ P5-006b: threads consumindo tiles de uma fila compartilhada
 
 ## Proximo Passo Recomendado
 
-Comecar pelo **P5-001a - renderizacao por regiao single-thread**.
+Seguir para **P5-002a - renderizacao multithread por faixas horizontais**.
 
 Motivo:
 
-- ainda nao envolve concorrencia;
-- cria a unidade de trabalho que sera usada pelas threads;
-- facilita testes de equivalencia;
-- torna o passo para multicore muito menor e mais facil de entender.
-
+- `mandel_render_region_f64` ja criou a unidade de trabalho;
+- ja temos testes mostrando que regioes reconstruem o render completo;
+- agora podemos introduzir `pthread_create` e `pthread_join` usando faixas de linhas;
+- o proximo foco de aprendizado passa a ser concorrencia controlada com buffer compartilhado.
