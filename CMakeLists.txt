@@ -13,6 +13,7 @@ include(GNUInstallDirs)
 
 add_library(mandel_core
     src/mandel_core.c
+    src/mandel_render.c
 )
 
 target_include_directories(mandel_core
@@ -34,6 +35,10 @@ add_executable(test_mandel_types
     tests/unit/test_mandel_types.c
 )
 
+add_executable(test_mandel_render
+    tests/unit/test_mandel_render.c
+)
+
 target_include_directories(test_mandel_types
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
@@ -44,10 +49,17 @@ target_link_libraries(test_mandel_core
         mandel_core
 )
 
+target_link_libraries(test_mandel_render
+    PRIVATE
+        mandel_core
+)
+
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(test_mandel_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_mandel_types PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(test_mandel_render PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 add_test(NAME mandel_core COMMAND test_mandel_core)
 add_test(NAME mandel_types COMMAND test_mandel_types)
+add_test(NAME mandel_render COMMAND test_mandel_render)

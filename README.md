@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, and viewport type.
+Initial project structure, pure C Mandelbrot escape core, viewport type, and local buffer renderer.
 
 ## Planned Binaries
 
@@ -36,5 +36,7 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+There is no user-facing renderer binary yet. At this stage, the Mandelbrot core and buffer renderer are exercised through unit tests.
 
 Each completed milestone should include updated run instructions for the binaries and demos available at that point.
