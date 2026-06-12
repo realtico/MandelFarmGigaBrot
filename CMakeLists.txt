@@ -128,6 +128,7 @@ add_test(
         --max-iter 128
         --scene medium
         --threads 2
+        --repeat 2
 )
 add_test(
     NAME mandel_bench_json
@@ -136,6 +137,7 @@ add_test(
         --width 64
         --height 48
         --threads 3
+        --repeat 2
         --json
 )
 add_test(
@@ -148,6 +150,7 @@ add_test(
         --node-report
         --node-name test-node
         --threads 2
+        --repeat 2
 )
 add_test(
     NAME mandel_node_report_output
@@ -168,6 +171,7 @@ add_test(
         --height 48
         --max-iter 128
         --thread-sweep 1,2,4
+        --repeat 2
 )
 add_test(
     NAME mandel_thread_sweep_json
@@ -177,6 +181,7 @@ add_test(
         --height 48
         --max-iter 128
         --thread-sweep 1,2,4
+        --repeat 2
         --json
 )
 

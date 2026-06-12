@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #define MAX_THREAD_SWEEP_ITEMS 64
+#define MAX_BENCH_REPEAT 1000
 
 typedef struct {
     const char *name;
@@ -23,6 +24,7 @@ typedef struct {
     int json;
     int node_report;
     int threads;
+    int repeat;
     int thread_sweep[MAX_THREAD_SWEEP_ITEMS];
     int thread_sweep_count;
     const char *node_name;
@@ -41,9 +43,12 @@ typedef struct {
 typedef struct {
     int threads;
     double duration_ms;
+    double duration_ms_avg;
+    double duration_ms_worst;
     double pixels_s;
     uint64_t total_iterations;
     double iterations_s;
+    int repeat;
 } BenchmarkResult;
 
 static const BenchScene BENCH_SCENES[] = {
@@ -86,7 +91,7 @@ static void print_usage(FILE *stream, const char *program)
 {
     fprintf(stream,
         "Usage: %s [--scene easy|medium|hard] [--width N] [--height N] [--max-iter N] [--json]\n"
-        "          [--center-re X --center-im Y --scale X] [--threads N]\n"
+        "          [--center-re X --center-im Y --scale X] [--threads N] [--repeat N]\n"
         "          [--thread-sweep 1,2,4,8]\n"
         "          [--node-report] [--node-name NAME] [--output FILE]\n",
         program);
@@ -212,6 +217,7 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
     options->json = 0;
     options->node_report = 0;
     options->threads = 1;
+    options->repeat = 1;
     options->thread_sweep_count = 0;
     options->node_name = 0;
     options->output_path = 0;
@@ -263,6 +269,10 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
             if (require_value(i, argc, argv[i]) != 0 || parse_int_arg(argv[++i], &options->threads) != 0) {
                 return -1;
             }
+        } else if (strcmp(argv[i], "--repeat") == 0) {
+            if (require_value(i, argc, argv[i]) != 0 || parse_int_arg(argv[++i], &options->repeat) != 0) {
+                return -1;
+            }
         } else if (strcmp(argv[i], "--thread-sweep") == 0) {
             if (require_value(i, argc, argv[i]) != 0 || parse_thread_sweep_arg(argv[++i], options) != 0) {
                 fprintf(stderr, "--thread-sweep expects a comma-separated list of positive integers, e.g. 1,2,4,8\n");
@@ -288,6 +298,11 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
 
     if (options->view.width <= 0 || options->view.height <= 0 || options->view.scale <= 0.0 || options->view.max_iter <= 0) {
         fprintf(stderr, "width, height, scale, and max-iter must be positive\n");
+        return -1;
+    }
+
+    if (options->repeat <= 0 || options->repeat > MAX_BENCH_REPEAT) {
+        fprintf(stderr, "repeat must be between 1 and %d\n", MAX_BENCH_REPEAT);
         return -1;
     }
 
@@ -503,27 +518,73 @@ static int run_benchmark_once(const MandelView *view, int threads, uint32_t *ite
 
     result->threads = threads;
     result->duration_ms = duration_s * 1000.0;
+    result->duration_ms_avg = result->duration_ms;
+    result->duration_ms_worst = result->duration_ms;
     result->total_iterations = sum_iterations(iterations, pixel_count);
     result->pixels_s = duration_s > 0.0 ? (double)pixel_count / duration_s : 0.0;
     result->iterations_s = duration_s > 0.0 ? (double)result->total_iterations / duration_s : 0.0;
+    result->repeat = 1;
     return 0;
 }
 
-static void print_human_report(FILE *stream, const BenchOptions *options, double duration_ms, double pixels_s, double iterations_s, uint64_t total_iterations)
+static int run_benchmark_repeated(const MandelView *view, int threads, int repeat, uint32_t *iterations, size_t pixel_count, BenchmarkResult *result)
+{
+    BenchmarkResult best;
+    double duration_sum = 0.0;
+    double duration_worst = 0.0;
+
+    /*
+     * Microbenchmarks are noisy: the OS scheduler, background processes and
+     * cache state can move a single measurement around. We therefore run the
+     * same configuration several times and keep:
+     *
+     * - duration_ms: the best observed time, useful for comparing the engine;
+     * - duration_ms_avg: the average, useful for seeing typical behavior;
+     * - duration_ms_worst: the slowest run, useful for spotting jitter.
+     */
+    for (int i = 0; i < repeat; ++i) {
+        BenchmarkResult current;
+
+        if (run_benchmark_once(view, threads, iterations, pixel_count, &current) != 0) {
+            return -1;
+        }
+
+        if (i == 0 || current.duration_ms < best.duration_ms) {
+            best = current;
+        }
+
+        if (i == 0 || current.duration_ms > duration_worst) {
+            duration_worst = current.duration_ms;
+        }
+
+        duration_sum += current.duration_ms;
+    }
+
+    *result = best;
+    result->duration_ms_avg = duration_sum / (double)repeat;
+    result->duration_ms_worst = duration_worst;
+    result->repeat = repeat;
+    return 0;
+}
+
+static void print_human_report(FILE *stream, const BenchOptions *options, const BenchmarkResult *result)
 {
     fprintf(stream, "MandelFarmGigaBrot benchmark\n");
     fprintf(stream, "  bench_version: mandelbench.0.1\n");
     fprintf(stream, "  backend: %s\n", bench_backend_name(options));
     fprintf(stream, "  threads: %d\n", options->threads);
+    fprintf(stream, "  repeat: %d\n", result->repeat);
     fprintf(stream, "  scene: %s\n", options->scene_name);
     fprintf(stream, "  resolution: %dx%d\n", options->view.width, options->view.height);
     fprintf(stream, "  center: %.15g, %.15g\n", options->view.center_re, options->view.center_im);
     fprintf(stream, "  scale: %.15g\n", options->view.scale);
     fprintf(stream, "  max_iter: %d\n", options->view.max_iter);
-    fprintf(stream, "  duration_ms: %.3f\n", duration_ms);
-    fprintf(stream, "  pixels_s: %.3f\n", pixels_s);
-    fprintf(stream, "  total_iterations: %llu\n", (unsigned long long)total_iterations);
-    fprintf(stream, "  iterations_s: %.3f\n", iterations_s);
+    fprintf(stream, "  duration_ms: %.3f\n", result->duration_ms);
+    fprintf(stream, "  duration_ms_avg: %.3f\n", result->duration_ms_avg);
+    fprintf(stream, "  duration_ms_worst: %.3f\n", result->duration_ms_worst);
+    fprintf(stream, "  pixels_s: %.3f\n", result->pixels_s);
+    fprintf(stream, "  total_iterations: %llu\n", (unsigned long long)result->total_iterations);
+    fprintf(stream, "  iterations_s: %.3f\n", result->iterations_s);
 }
 
 static void print_thread_sweep_human(FILE *stream, const BenchOptions *options, const BenchmarkResult *results, int result_count)
@@ -535,21 +596,24 @@ static void print_thread_sweep_human(FILE *stream, const BenchOptions *options, 
     fprintf(stream, "  scene: %s\n", options->scene_name);
     fprintf(stream, "  resolution: %dx%d\n", options->view.width, options->view.height);
     fprintf(stream, "  max_iter: %d\n", options->view.max_iter);
+    fprintf(stream, "  repeat: %d\n", options->repeat);
     fprintf(stream, "\n");
-    fprintf(stream, "%8s  %12s  %16s  %8s\n", "Threads", "Time(ms)", "Iter/s", "Speedup");
+    fprintf(stream, "%8s  %12s  %12s  %12s  %16s  %8s\n", "Threads", "Best(ms)", "Avg(ms)", "Worst(ms)", "Iter/s", "Speedup");
 
     for (int i = 0; i < result_count; ++i) {
         const double speedup = baseline > 0.0 ? results[i].iterations_s / baseline : 0.0;
 
-        fprintf(stream, "%8d  %12.3f  %16.3f  %7.2fx\n",
+        fprintf(stream, "%8d  %12.3f  %12.3f  %12.3f  %16.3f  %7.2fx\n",
             results[i].threads,
             results[i].duration_ms,
+            results[i].duration_ms_avg,
+            results[i].duration_ms_worst,
             results[i].iterations_s,
             speedup);
     }
 }
 
-static void print_json_report(FILE *stream, const BenchOptions *options, double duration_ms, double pixels_s, double iterations_s, uint64_t total_iterations)
+static void print_json_report(FILE *stream, const BenchOptions *options, const BenchmarkResult *result)
 {
     fprintf(stream, "{\n");
     fprintf(stream, "  \"project\": \"MandelFarmGigaBrot\",\n");
@@ -558,6 +622,7 @@ static void print_json_report(FILE *stream, const BenchOptions *options, double 
     print_json_string(stream, bench_backend_name(options));
     fprintf(stream, ",\n");
     fprintf(stream, "  \"threads\": %d,\n", options->threads);
+    fprintf(stream, "  \"repeat\": %d,\n", result->repeat);
     fprintf(stream, "  \"scene\": ");
     print_json_string(stream, options->scene_name);
     fprintf(stream, ",\n");
@@ -567,10 +632,13 @@ static void print_json_report(FILE *stream, const BenchOptions *options, double 
     fprintf(stream, "  \"center_im\": %.17g,\n", options->view.center_im);
     fprintf(stream, "  \"scale\": %.17g,\n", options->view.scale);
     fprintf(stream, "  \"max_iter\": %d,\n", options->view.max_iter);
-    fprintf(stream, "  \"duration_ms\": %.6f,\n", duration_ms);
-    fprintf(stream, "  \"pixels_s\": %.6f,\n", pixels_s);
-    fprintf(stream, "  \"total_iterations\": %llu,\n", (unsigned long long)total_iterations);
-    fprintf(stream, "  \"iterations_s\": %.6f\n", iterations_s);
+    fprintf(stream, "  \"duration_ms\": %.6f,\n", result->duration_ms);
+    fprintf(stream, "  \"duration_ms_best\": %.6f,\n", result->duration_ms);
+    fprintf(stream, "  \"duration_ms_avg\": %.6f,\n", result->duration_ms_avg);
+    fprintf(stream, "  \"duration_ms_worst\": %.6f,\n", result->duration_ms_worst);
+    fprintf(stream, "  \"pixels_s\": %.6f,\n", result->pixels_s);
+    fprintf(stream, "  \"total_iterations\": %llu,\n", (unsigned long long)result->total_iterations);
+    fprintf(stream, "  \"iterations_s\": %.6f\n", result->iterations_s);
     fprintf(stream, "}\n");
 }
 
@@ -588,6 +656,7 @@ static void print_thread_sweep_json(FILE *stream, const BenchOptions *options, c
     fprintf(stream, "  \"width\": %d,\n", options->view.width);
     fprintf(stream, "  \"height\": %d,\n", options->view.height);
     fprintf(stream, "  \"max_iter\": %d,\n", options->view.max_iter);
+    fprintf(stream, "  \"repeat\": %d,\n", options->repeat);
     fprintf(stream, "  \"results\": [\n");
 
     for (int i = 0; i < result_count; ++i) {
@@ -598,7 +667,11 @@ static void print_thread_sweep_json(FILE *stream, const BenchOptions *options, c
         print_json_string(stream, backend_name_for_threads(results[i].threads));
         fprintf(stream, ",\n");
         fprintf(stream, "      \"threads\": %d,\n", results[i].threads);
+        fprintf(stream, "      \"repeat\": %d,\n", results[i].repeat);
         fprintf(stream, "      \"duration_ms\": %.6f,\n", results[i].duration_ms);
+        fprintf(stream, "      \"duration_ms_best\": %.6f,\n", results[i].duration_ms);
+        fprintf(stream, "      \"duration_ms_avg\": %.6f,\n", results[i].duration_ms_avg);
+        fprintf(stream, "      \"duration_ms_worst\": %.6f,\n", results[i].duration_ms_worst);
         fprintf(stream, "      \"pixels_s\": %.6f,\n", results[i].pixels_s);
         fprintf(stream, "      \"total_iterations\": %llu,\n", (unsigned long long)results[i].total_iterations);
         fprintf(stream, "      \"iterations_s\": %.6f,\n", results[i].iterations_s);
@@ -610,7 +683,7 @@ static void print_thread_sweep_json(FILE *stream, const BenchOptions *options, c
     fprintf(stream, "}\n");
 }
 
-static void print_node_report_json(FILE *stream, const BenchOptions *options, const NodeInfo *node, double duration_ms, double pixels_s, double iterations_s)
+static void print_node_report_json(FILE *stream, const BenchOptions *options, const NodeInfo *node, const BenchmarkResult *result)
 {
     fprintf(stream, "{\n");
     fprintf(stream, "  \"project\": \"MandelFarmGigaBrot\",\n");
@@ -645,15 +718,19 @@ static void print_node_report_json(FILE *stream, const BenchOptions *options, co
     print_json_string(stream, bench_backend_name(options));
     fprintf(stream, ",\n");
     fprintf(stream, "    \"threads\": %d,\n", options->threads);
+    fprintf(stream, "    \"repeat\": %d,\n", result->repeat);
     fprintf(stream, "    \"scene\": ");
     print_json_string(stream, options->scene_name);
     fprintf(stream, ",\n");
     fprintf(stream, "    \"width\": %d,\n", options->view.width);
     fprintf(stream, "    \"height\": %d,\n", options->view.height);
     fprintf(stream, "    \"max_iter\": %d,\n", options->view.max_iter);
-    fprintf(stream, "    \"duration_ms\": %.6f,\n", duration_ms);
-    fprintf(stream, "    \"pixels_s\": %.6f,\n", pixels_s);
-    fprintf(stream, "    \"scalar_f64_iter_s\": %.6f\n", iterations_s);
+    fprintf(stream, "    \"duration_ms\": %.6f,\n", result->duration_ms);
+    fprintf(stream, "    \"duration_ms_best\": %.6f,\n", result->duration_ms);
+    fprintf(stream, "    \"duration_ms_avg\": %.6f,\n", result->duration_ms_avg);
+    fprintf(stream, "    \"duration_ms_worst\": %.6f,\n", result->duration_ms_worst);
+    fprintf(stream, "    \"pixels_s\": %.6f,\n", result->pixels_s);
+    fprintf(stream, "    \"scalar_f64_iter_s\": %.6f\n", result->iterations_s);
     fprintf(stream, "  }\n");
     fprintf(stream, "}\n");
 }
@@ -691,7 +768,7 @@ int main(int argc, char **argv)
          * the full image before metrics are collected.
          */
         for (int i = 0; i < options.thread_sweep_count; ++i) {
-            if (run_benchmark_once(&options.view, options.thread_sweep[i], iterations, pixel_count, &results[i]) != 0) {
+            if (run_benchmark_repeated(&options.view, options.thread_sweep[i], options.repeat, iterations, pixel_count, &results[i]) != 0) {
                 fprintf(stderr, "failed to benchmark Mandelbrot render for %d threads\n", options.thread_sweep[i]);
                 close_report_stream(&options, report_stream);
                 free(iterations);
@@ -707,7 +784,7 @@ int main(int argc, char **argv)
     } else {
         BenchmarkResult result;
 
-        if (run_benchmark_once(&options.view, options.threads, iterations, pixel_count, &result) != 0) {
+        if (run_benchmark_repeated(&options.view, options.threads, options.repeat, iterations, pixel_count, &result) != 0) {
             fprintf(stderr, "failed to benchmark Mandelbrot render\n");
             close_report_stream(&options, report_stream);
             free(iterations);
@@ -718,11 +795,11 @@ int main(int argc, char **argv)
             NodeInfo node;
 
             collect_node_info(&node, options.node_name);
-            print_node_report_json(report_stream, &options, &node, result.duration_ms, result.pixels_s, result.iterations_s);
+            print_node_report_json(report_stream, &options, &node, &result);
         } else if (options.json) {
-            print_json_report(report_stream, &options, result.duration_ms, result.pixels_s, result.iterations_s, result.total_iterations);
+            print_json_report(report_stream, &options, &result);
         } else {
-            print_human_report(report_stream, &options, result.duration_ms, result.pixels_s, result.iterations_s, result.total_iterations);
+            print_human_report(report_stream, &options, &result);
         }
     }
 

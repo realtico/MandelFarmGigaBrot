@@ -178,22 +178,23 @@ Status atual:
 ```text
 P5-004a concluido: mandel-bench aceita --thread-sweep.
 P5-004b concluido: saidas humana e JSON calculam speedup relativo.
+P5-004c concluido: mandel-bench aceita --repeat para reduzir ruido de medicao.
 ```
 
 Exemplo:
 
 ```sh
-./build/bin/mandel-bench --scene hard --thread-sweep 1,2,4,8
+./build/bin/mandel-bench --scene hard --thread-sweep 1,2,4,8 --repeat 5
 ```
 
 Saida humana sugerida:
 
 ```text
-Threads    Time(ms)    Iter/s       Speedup
-1          4200        80 M         1.00x
-2          2300        146 M        1.82x
-4          1250        269 M        3.36x
-8          850         395 M        4.94x
+Threads    Best(ms)    Avg(ms)     Worst(ms)   Iter/s       Speedup
+1          4200        4210        4235        80 M         1.00x
+2          2300        2315        2360        146 M        1.82x
+4          1250        1280        1320        269 M        3.36x
+8          850         880         930         395 M        4.94x
 ```
 
 Aprendizados:
@@ -204,6 +205,8 @@ Aprendizados:
 - diferenca entre cores fisicos e logicos;
 - por que `8 threads` nem sempre significa `8x` mais desempenho;
 - como workload pequeno pode distorcer benchmark.
+- por que repetir medicoes ajuda a separar desempenho real de ruido do sistema operacional;
+- diferenca entre melhor tempo, tempo medio e pior tempo.
 
 Criterios de aceite:
 
@@ -211,6 +214,7 @@ Criterios de aceite:
 - calcula speedup relativo a 1 thread;
 - tem saida humana legivel;
 - tem saida JSON opcional.
+- aceita `--repeat N` para executar cada configuracao varias vezes.
 
 ## P5.5 - Preparar Tiles Locais
 
@@ -298,6 +302,7 @@ P5-003b: JSON com threads/backend
 
 P5-004a: thread sweep
 P5-004b: calculo de speedup
+P5-004c: repeticao de benchmark com melhor/media/pior tempo
 
 P5-005a: tipos basicos de tile
 P5-005b: renderizacao local por tiles em sequencia
@@ -317,4 +322,5 @@ Motivo:
 - os testes cobrem `thread_count` 1, 2, 3 e mais threads que linhas;
 - `mandel-bench --threads` ja permite medir uma configuracao por vez;
 - `mandel-bench --thread-sweep` ja compara varias configuracoes em uma mesma execucao;
+- `mandel-bench --repeat` ja reduz ruido e ajuda a enxergar plateau de desempenho;
 - o proximo foco de aprendizado passa a ser tiles como unidade de trabalho mais flexivel.

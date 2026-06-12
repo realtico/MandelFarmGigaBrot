@@ -85,6 +85,15 @@ Emit JSON for scripts or future node reports:
 
 Available benchmark scenes are `easy`, `medium`, and `hard`. Use `--threads N` to run the row-band pthread renderer. The backend is reported as `scalar_f64` for one thread and `scalar_f64_threads` for multiple threads.
 
+Reduce measurement noise by repeating the same benchmark and reporting best, average, and worst times:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --threads 8 \
+  --repeat 5
+```
+
 Compare several thread counts in one benchmark run:
 
 ```sh
@@ -93,10 +102,11 @@ Compare several thread counts in one benchmark run:
   --width 1024 \
   --height 768 \
   --max-iter 2000 \
-  --thread-sweep 1,2,4,8,10
+  --thread-sweep 1,2,4,8,10 \
+  --repeat 5
 ```
 
-The sweep reports speedup relative to the first thread count in the list.
+The sweep reports speedup relative to the first thread count in the list. `duration_ms` is the best observed run for that configuration; `duration_ms_avg` and `duration_ms_worst` help reveal scheduler noise and outliers.
 
 Generate a local node capability report:
 
