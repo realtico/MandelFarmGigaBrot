@@ -56,6 +56,10 @@ add_executable(mandel-render
     apps/mandel-render/main.c
 )
 
+add_executable(mandel-bench
+    apps/mandel-bench/main.c
+)
+
 target_include_directories(test_mandel_types
     PRIVATE
         ${PROJECT_SOURCE_DIR}/include
@@ -81,12 +85,18 @@ target_link_libraries(mandel-render
         mandel_core
 )
 
+target_link_libraries(mandel-bench
+    PRIVATE
+        mandel_core
+)
+
 if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(test_mandel_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_mandel_types PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_mandel_render PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(test_mandel_palette PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(mandel-render PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(mandel-bench PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 add_test(NAME mandel_core COMMAND test_mandel_core)
@@ -104,8 +114,28 @@ add_test(
         --max-iter 128
         --output "${CMAKE_BINARY_DIR}/mandel-smoke.ppm"
 )
+add_test(
+    NAME mandel_bench_cli
+    COMMAND mandel-bench
+        --width 64
+        --height 48
+        --max-iter 128
+        --scene medium
+)
+add_test(
+    NAME mandel_bench_json
+    COMMAND mandel-bench
+        --scene hard
+        --width 64
+        --height 48
+        --json
+)
 
 set_target_properties(mandel-render PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+set_target_properties(mandel-bench PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 

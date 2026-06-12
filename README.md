@@ -8,7 +8,7 @@ The project starts small: a local C renderer, a benchmark tool, and a simple vie
 
 ## Current Status
 
-Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, and `mandel-render` PPM CLI.
+Initial project structure, pure C Mandelbrot escape core, viewport type, local buffer renderer, Nanquim demo, `mandel-render` PPM CLI, and `mandel-bench` local benchmark.
 
 ## Planned Binaries
 
@@ -59,5 +59,29 @@ Render a PPM image from the command line:
 ```
 
 At this stage, `mandel-render` writes binary PPM P6 files. The Nanquim demo and CLI renderer share the same palette.
+
+Run the local benchmark:
+
+```sh
+./build/bin/mandel-bench --scene medium
+```
+
+Run a smaller custom benchmark:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --width 1024 \
+  --height 768 \
+  --max-iter 2000
+```
+
+Emit JSON for scripts or future node reports:
+
+```sh
+./build/bin/mandel-bench --scene hard --json
+```
+
+Available benchmark scenes are `easy`, `medium`, and `hard`. The current backend name is `scalar_f64`.
 
 Each completed milestone should include updated run instructions for the binaries and demos available at that point.
