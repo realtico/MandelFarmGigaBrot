@@ -141,6 +141,8 @@ Study tile granularity with a fixed number of worker threads:
 
 `--tile-sweep` implies the tile scheduler and reports how many tile jobs each size creates.
 
+Local benchmark studies and captured JSON results live in `docs/benchmarks/`.
+
 The local tile renderer is also exposed as C API and covered by unit tests:
 
 ```c

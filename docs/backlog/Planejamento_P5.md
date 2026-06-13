@@ -420,18 +420,23 @@ P5-006c: benchmark comparando scheduler bands vs tiles
 P5-007a: mandel-bench aceita --tile-sweep
 P5-007b: saida humana mostra tamanho do tile e quantidade de tiles
 P5-007c: saida JSON registra tile_size, tile_count e speedup relativo
+
+P5-008a: docs/benchmarks criado para estudos reproduziveis
+P5-008b: estudo local Methode registrado em Markdown
+P5-008c: JSONs de node report, thread sweep e tile sweep salvos
 ```
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-008 - registrar estudos locais de desempenho**.
+Seguir para **P5-009 - melhorar ergonomia de estudos combinados**.
 
 Motivo:
 
 - ja temos scheduler fixo por faixas;
 - ja temos scheduler dinamico por fila de tiles;
 - `--tile-sweep` ja mede como `16`, `32`, `64`, `128`, `256` e `512` mudam overhead, balanceamento e throughput;
-- o proximo passo natural e guardar resultados e observacoes em docs para comparar maquinas, cenas e tamanhos de tiles sem depender apenas do historico do terminal.
+- o estudo local Methode ja esta registrado em `docs/benchmarks`;
+- o proximo passo natural e reduzir comandos repetitivos quando quisermos cruzar threads, tiles, cenas e resolucoes.
 
 Como rodar este marco:
 
@@ -461,4 +466,11 @@ Gerar JSON para analise posterior:
   --repeat 5 \
   --json \
   --output assets/output/tile-sweep-hard.json
+```
+
+Relatorio local registrado:
+
+```text
+docs/benchmarks/p5-008-methode-local.md
+docs/benchmarks/results/
 ```
