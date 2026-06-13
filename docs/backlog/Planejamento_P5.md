@@ -393,6 +393,42 @@ Exemplo:
   --repeat 5
 ```
 
+## P5.8 - Estudos Locais De Desempenho
+
+Depois de criar as ferramentas, registramos uma primeira rodada de estudo local.
+
+Status atual:
+
+```text
+P5-008a concluido: docs/benchmarks criado para estudos reproduziveis.
+P5-008b concluido: estudo local Methode registrado em Markdown.
+P5-008c concluido: JSONs de node report, thread sweep e tile sweep salvos.
+```
+
+## P5.9 - Tile Grid
+
+Para fechar a rodada multicore local, adicionamos um estudo combinado.
+
+Status atual:
+
+```text
+P5-009a concluido: mandel-bench aceita --study tile-grid.
+P5-009b concluido: --threads-list cruza threads com --tile-sweep.
+P5-009c concluido: saida humana mostra matriz tile x threads.
+P5-009d concluido: saida JSON registra cada celula da matriz.
+```
+
+Exemplo:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --study tile-grid \
+  --threads-list 8,10,12,16 \
+  --tile-sweep 16,32,64,128 \
+  --repeat 5
+```
+
 ## Backlog Replanejado
 
 ```text
@@ -424,11 +460,16 @@ P5-007c: saida JSON registra tile_size, tile_count e speedup relativo
 P5-008a: docs/benchmarks criado para estudos reproduziveis
 P5-008b: estudo local Methode registrado em Markdown
 P5-008c: JSONs de node report, thread sweep e tile sweep salvos
+
+P5-009a: mandel-bench --study tile-grid
+P5-009b: --threads-list para estudos combinados
+P5-009c: matriz humana tile x threads
+P5-009d: JSON do estudo combinado
 ```
 
 ## Proximo Passo Recomendado
 
-Seguir para **P5-009 - melhorar ergonomia de estudos combinados**.
+Encerrar o P5 como rodada multicore local e replanejar os proximos epicos.
 
 Motivo:
 
@@ -436,7 +477,8 @@ Motivo:
 - ja temos scheduler dinamico por fila de tiles;
 - `--tile-sweep` ja mede como `16`, `32`, `64`, `128`, `256` e `512` mudam overhead, balanceamento e throughput;
 - o estudo local Methode ja esta registrado em `docs/benchmarks`;
-- o proximo passo natural e reduzir comandos repetitivos quando quisermos cruzar threads, tiles, cenas e resolucoes.
+- `--study tile-grid` cruza threads e tiles em uma unica execucao;
+- o proximo passo natural e decidir o foco do proximo epico: novos metodos matematicos, backend numerico, visualizacao, ou distribuicao.
 
 Como rodar este marco:
 

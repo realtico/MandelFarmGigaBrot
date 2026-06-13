@@ -67,6 +67,19 @@ Study tile granularity:
   --output docs/benchmarks/results/tile-sweep-hard-threads10.json
 ```
 
+Study tile size and thread count together:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --study tile-grid \
+  --threads-list 8,10,12,16 \
+  --tile-sweep 16,32,64,128 \
+  --repeat 5 \
+  --json \
+  --output docs/benchmarks/results/tile-grid-hard.json
+```
+
 ## Notes To Record
 
 - Machine name and CPU shape.

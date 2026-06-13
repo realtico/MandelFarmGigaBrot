@@ -141,6 +141,17 @@ Study tile granularity with a fixed number of worker threads:
 
 `--tile-sweep` implies the tile scheduler and reports how many tile jobs each size creates.
 
+Study tile size and thread count together:
+
+```sh
+./build/bin/mandel-bench \
+  --scene hard \
+  --study tile-grid \
+  --threads-list 8,10,12,16 \
+  --tile-sweep 16,32,64,128 \
+  --repeat 5
+```
+
 Local benchmark studies and captured JSON results live in `docs/benchmarks/`.
 
 The local tile renderer is also exposed as C API and covered by unit tests:

@@ -19,6 +19,11 @@ typedef enum {
     BENCH_SCHEDULER_TILES,
 } BenchScheduler;
 
+typedef enum {
+    BENCH_STUDY_NONE,
+    BENCH_STUDY_TILE_GRID,
+} BenchStudy;
+
 typedef struct {
     const char *name;
     MandelView view;
@@ -37,6 +42,9 @@ typedef struct {
     int thread_sweep_count;
     int tile_sweep[MAX_TILE_SWEEP_ITEMS];
     int tile_sweep_count;
+    int threads_list[MAX_THREAD_SWEEP_ITEMS];
+    int threads_list_count;
+    BenchStudy study;
     const char *node_name;
     const char *output_path;
 } BenchOptions;
@@ -109,6 +117,7 @@ static void print_usage(FILE *stream, const char *program)
         "Usage: %s [--scene easy|medium|hard] [--width N] [--height N] [--max-iter N] [--json]\n"
         "          [--center-re X --center-im Y --scale X] [--threads N] [--repeat N]\n"
         "          [--scheduler bands|tiles] [--tile-size N]\n"
+        "          [--study tile-grid] [--threads-list 8,10,12]\n"
         "          [--thread-sweep 1,2,4,8] [--tile-sweep 32,64,128]\n"
         "          [--node-report] [--node-name NAME] [--output FILE]\n",
         program);
@@ -198,6 +207,49 @@ static int parse_thread_sweep_arg(const char *value, BenchOptions *options)
     return 0;
 }
 
+static int parse_threads_list_arg(const char *value, BenchOptions *options)
+{
+    const char *cursor = value;
+    int count = 0;
+
+    while (*cursor != '\0') {
+        char *end = 0;
+        long parsed = 0;
+
+        errno = 0;
+        parsed = strtol(cursor, &end, 10);
+
+        if (errno != 0 || end == cursor || parsed <= 0 || parsed > 2147483647L) {
+            return -1;
+        }
+
+        if (count >= MAX_THREAD_SWEEP_ITEMS) {
+            fprintf(stderr, "threads list supports at most %d entries\n", MAX_THREAD_SWEEP_ITEMS);
+            return -1;
+        }
+
+        options->threads_list[count++] = (int)parsed;
+
+        if (*end == ',') {
+            cursor = end + 1;
+            if (*cursor == '\0') {
+                return -1;
+            }
+        } else if (*end == '\0') {
+            cursor = end;
+        } else {
+            return -1;
+        }
+    }
+
+    if (count == 0) {
+        return -1;
+    }
+
+    options->threads_list_count = count;
+    return 0;
+}
+
 static int parse_tile_sweep_arg(const char *value, BenchOptions *options)
 {
     const char *cursor = value;
@@ -260,6 +312,16 @@ static int parse_scheduler_arg(const char *value, BenchScheduler *scheduler)
     return -1;
 }
 
+static int parse_study_arg(const char *value, BenchStudy *study)
+{
+    if (strcmp(value, "tile-grid") == 0) {
+        *study = BENCH_STUDY_TILE_GRID;
+        return 0;
+    }
+
+    return -1;
+}
+
 static int require_value(int index, int argc, const char *option)
 {
     if (index + 1 >= argc) {
@@ -315,6 +377,8 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
     options->scheduler = BENCH_SCHEDULER_BANDS;
     options->thread_sweep_count = 0;
     options->tile_sweep_count = 0;
+    options->threads_list_count = 0;
+    options->study = BENCH_STUDY_NONE;
     options->node_name = 0;
     options->output_path = 0;
 
@@ -376,6 +440,16 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
         } else if (strcmp(argv[i], "--scheduler") == 0) {
             if (require_value(i, argc, argv[i]) != 0 || parse_scheduler_arg(argv[++i], &options->scheduler) != 0) {
                 fprintf(stderr, "--scheduler expects bands or tiles\n");
+                return -1;
+            }
+        } else if (strcmp(argv[i], "--study") == 0) {
+            if (require_value(i, argc, argv[i]) != 0 || parse_study_arg(argv[++i], &options->study) != 0) {
+                fprintf(stderr, "--study expects tile-grid\n");
+                return -1;
+            }
+        } else if (strcmp(argv[i], "--threads-list") == 0) {
+            if (require_value(i, argc, argv[i]) != 0 || parse_threads_list_arg(argv[++i], options) != 0) {
+                fprintf(stderr, "--threads-list expects a comma-separated list of positive integers, e.g. 8,10,12\n");
                 return -1;
             }
         } else if (strcmp(argv[i], "--tile-size") == 0) {
@@ -448,7 +522,24 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
         options->tile_size = options->tile_sweep[0];
     }
 
-    if (options->thread_sweep_count > 0 && options->tile_sweep_count > 0) {
+    if (options->study == BENCH_STUDY_TILE_GRID) {
+        options->scheduler = BENCH_SCHEDULER_TILES;
+
+        if (options->threads_list_count == 0 || options->tile_sweep_count == 0) {
+            fprintf(stderr, "--study tile-grid requires --threads-list and --tile-sweep\n");
+            return -1;
+        }
+
+        if (options->thread_sweep_count > 0) {
+            fprintf(stderr, "--study tile-grid uses --threads-list instead of --thread-sweep\n");
+            return -1;
+        }
+    } else if (options->threads_list_count > 0) {
+        fprintf(stderr, "--threads-list currently requires --study tile-grid\n");
+        return -1;
+    }
+
+    if (options->study == BENCH_STUDY_NONE && options->thread_sweep_count > 0 && options->tile_sweep_count > 0) {
         fprintf(stderr, "--thread-sweep and --tile-sweep cannot be combined yet\n");
         return -1;
     }
@@ -458,7 +549,7 @@ static int parse_options(int argc, char **argv, BenchOptions *options)
         return -1;
     }
 
-    if (options->node_report && (options->thread_sweep_count > 0 || options->tile_sweep_count > 0)) {
+    if (options->node_report && (options->thread_sweep_count > 0 || options->tile_sweep_count > 0 || options->study != BENCH_STUDY_NONE)) {
         fprintf(stderr, "--node-report cannot be combined with sweep modes yet\n");
         return -1;
     }
@@ -859,6 +950,40 @@ static void print_tile_sweep_human(FILE *stream, const BenchOptions *options, co
     }
 }
 
+static void print_tile_grid_human(FILE *stream, const BenchOptions *options, const BenchmarkResult *results)
+{
+    fprintf(stream, "MandelFarmGigaBrot tile grid study\n");
+    fprintf(stream, "  bench_version: mandelbench.0.1\n");
+    fprintf(stream, "  scene: %s\n", options->scene_name);
+    fprintf(stream, "  resolution: %dx%d\n", options->view.width, options->view.height);
+    fprintf(stream, "  max_iter: %d\n", options->view.max_iter);
+    fprintf(stream, "  scheduler: tiles\n");
+    fprintf(stream, "  repeat: %d\n", options->repeat);
+    fprintf(stream, "\n");
+
+    fprintf(stream, "%8s  %8s", "Tile", "Tiles");
+    for (int col = 0; col < options->threads_list_count; ++col) {
+        fprintf(stream, "  %10dt", options->threads_list[col]);
+    }
+    fprintf(stream, "\n");
+
+    for (int row = 0; row < options->tile_sweep_count; ++row) {
+        const int tile_size = options->tile_sweep[row];
+        const int tile_cols = (options->view.width + tile_size - 1) / tile_size;
+        const int tile_rows = (options->view.height + tile_size - 1) / tile_size;
+        const int tile_count = tile_cols * tile_rows;
+
+        fprintf(stream, "%8d  %8d", tile_size, tile_count);
+
+        for (int col = 0; col < options->threads_list_count; ++col) {
+            const BenchmarkResult *result = &results[row * options->threads_list_count + col];
+            fprintf(stream, "  %10.3f", result->duration_ms);
+        }
+
+        fprintf(stream, "\n");
+    }
+}
+
 static void print_json_report(FILE *stream, const BenchOptions *options, const BenchmarkResult *result)
 {
     fprintf(stream, "{\n");
@@ -988,6 +1113,63 @@ static void print_tile_sweep_json(FILE *stream, const BenchOptions *options, con
     fprintf(stream, "}\n");
 }
 
+static void print_tile_grid_json(FILE *stream, const BenchOptions *options, const BenchmarkResult *results)
+{
+    fprintf(stream, "{\n");
+    fprintf(stream, "  \"project\": \"MandelFarmGigaBrot\",\n");
+    fprintf(stream, "  \"bench_version\": \"mandelbench.0.1\",\n");
+    fprintf(stream, "  \"type\": \"tile_grid\",\n");
+    fprintf(stream, "  \"scene\": ");
+    print_json_string(stream, options->scene_name);
+    fprintf(stream, ",\n");
+    fprintf(stream, "  \"width\": %d,\n", options->view.width);
+    fprintf(stream, "  \"height\": %d,\n", options->view.height);
+    fprintf(stream, "  \"max_iter\": %d,\n", options->view.max_iter);
+    fprintf(stream, "  \"scheduler\": \"tiles\",\n");
+    fprintf(stream, "  \"repeat\": %d,\n", options->repeat);
+    fprintf(stream, "  \"threads_list\": [");
+    for (int i = 0; i < options->threads_list_count; ++i) {
+        fprintf(stream, "%s%d", i == 0 ? "" : ", ", options->threads_list[i]);
+    }
+    fprintf(stream, "],\n");
+    fprintf(stream, "  \"tile_sweep\": [");
+    for (int i = 0; i < options->tile_sweep_count; ++i) {
+        fprintf(stream, "%s%d", i == 0 ? "" : ", ", options->tile_sweep[i]);
+    }
+    fprintf(stream, "],\n");
+    fprintf(stream, "  \"results\": [\n");
+
+    for (int row = 0; row < options->tile_sweep_count; ++row) {
+        for (int col = 0; col < options->threads_list_count; ++col) {
+            const int index = row * options->threads_list_count + col;
+            const BenchmarkResult *result = &results[index];
+            const int tile_cols = (options->view.width + result->tile_size - 1) / result->tile_size;
+            const int tile_rows = (options->view.height + result->tile_size - 1) / result->tile_size;
+            const int tile_count = tile_cols * tile_rows;
+            const int last = index + 1 == options->tile_sweep_count * options->threads_list_count;
+
+            fprintf(stream, "    {\n");
+            fprintf(stream, "      \"backend\": \"scalar_f64_tile_queue\",\n");
+            fprintf(stream, "      \"scheduler\": \"tiles\",\n");
+            fprintf(stream, "      \"threads\": %d,\n", result->threads);
+            fprintf(stream, "      \"tile_size\": %d,\n", result->tile_size);
+            fprintf(stream, "      \"tile_count\": %d,\n", tile_count);
+            fprintf(stream, "      \"repeat\": %d,\n", result->repeat);
+            fprintf(stream, "      \"duration_ms\": %.6f,\n", result->duration_ms);
+            fprintf(stream, "      \"duration_ms_best\": %.6f,\n", result->duration_ms);
+            fprintf(stream, "      \"duration_ms_avg\": %.6f,\n", result->duration_ms_avg);
+            fprintf(stream, "      \"duration_ms_worst\": %.6f,\n", result->duration_ms_worst);
+            fprintf(stream, "      \"pixels_s\": %.6f,\n", result->pixels_s);
+            fprintf(stream, "      \"total_iterations\": %llu,\n", (unsigned long long)result->total_iterations);
+            fprintf(stream, "      \"iterations_s\": %.6f\n", result->iterations_s);
+            fprintf(stream, "    }%s\n", last ? "" : ",");
+        }
+    }
+
+    fprintf(stream, "  ]\n");
+    fprintf(stream, "}\n");
+}
+
 static void print_node_report_json(FILE *stream, const BenchOptions *options, const NodeInfo *node, const BenchmarkResult *result)
 {
     fprintf(stream, "{\n");
@@ -1068,7 +1250,43 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (options.thread_sweep_count > 0) {
+    if (options.study == BENCH_STUDY_TILE_GRID) {
+        BenchmarkResult results[MAX_TILE_SWEEP_ITEMS * MAX_THREAD_SWEEP_ITEMS];
+
+        /*
+         * Tile grid is the 2D study mode: it crosses tile sizes with thread
+         * counts so we can see the shape of the performance surface directly.
+         */
+        for (int row = 0; row < options.tile_sweep_count; ++row) {
+            for (int col = 0; col < options.threads_list_count; ++col) {
+                const int index = row * options.threads_list_count + col;
+
+                if (run_benchmark_repeated(
+                        &options.view,
+                        options.threads_list[col],
+                        BENCH_SCHEDULER_TILES,
+                        options.tile_sweep[row],
+                        options.repeat,
+                        iterations,
+                        pixel_count,
+                        &results[index]) != 0) {
+                    fprintf(stderr,
+                        "failed to benchmark Mandelbrot render for %d threads and tile size %d\n",
+                        options.threads_list[col],
+                        options.tile_sweep[row]);
+                    close_report_stream(&options, report_stream);
+                    free(iterations);
+                    return 1;
+                }
+            }
+        }
+
+        if (options.json) {
+            print_tile_grid_json(report_stream, &options, results);
+        } else {
+            print_tile_grid_human(report_stream, &options, results);
+        }
+    } else if (options.thread_sweep_count > 0) {
         BenchmarkResult results[MAX_THREAD_SWEEP_ITEMS];
 
         /*

@@ -232,6 +232,31 @@ add_test(
         --repeat 2
         --json
 )
+add_test(
+    NAME mandel_tile_grid_cli
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --max-iter 128
+        --study tile-grid
+        --threads-list 2,4
+        --tile-sweep 16,32
+        --repeat 2
+)
+add_test(
+    NAME mandel_tile_grid_json
+    COMMAND mandel-bench
+        --scene easy
+        --width 64
+        --height 48
+        --max-iter 128
+        --study tile-grid
+        --threads-list 2,4
+        --tile-sweep 16,32
+        --repeat 2
+        --json
+)
 
 set_target_properties(mandel-render PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
